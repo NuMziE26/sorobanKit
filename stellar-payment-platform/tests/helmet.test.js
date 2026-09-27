@@ -75,4 +75,13 @@ describe('Helmet Security Headers', () => {
     expect(csp).toContain("style-src 'self'");
     expect(csp).toContain("object-src 'none'");
   });
+
+  it('should set Permissions-Policy disabling camera, microphone, and geolocation', async () => {
+    const response = await request(app).get('/health');
+    expect(response.header).toHaveProperty('permissions-policy');
+    const policy = response.header['permissions-policy'];
+    expect(policy).toContain('camera=()');
+    expect(policy).toContain('microphone=()');
+    expect(policy).toContain('geolocation=()');
+  });
 });
