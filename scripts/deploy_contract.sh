@@ -16,5 +16,11 @@ if ! command -v node &> /dev/null; then
   exit 1
 fi
 
+# Ensure the stellar CLI is available
+if ! command -v stellar &> /dev/null; then
+  echo "stellar CLI not found. Install with: cargo install --locked stellar-cli" >&2
+  exit 1
+fi
+
 # Execute Node.js deployment script forwarding all arguments
 exec node "${SCRIPT_DIR}/deploy.js" "$@"

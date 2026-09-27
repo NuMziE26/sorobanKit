@@ -91,7 +91,7 @@ const deprecationMiddleware = (options = {}) => {
     if (!entry) return next();
 
     const deprecatedSince = toHttpDate(entry.deprecatedSince) || 'true';
-    const sunset = toHttpDate(entry.sunset);
+    const sunset = toHttpDate(entry.sunsetDate);
 
     res.set('Deprecation', deprecatedSince);
     if (sunset) res.set('Sunset', sunset);

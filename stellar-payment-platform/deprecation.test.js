@@ -52,7 +52,7 @@ describe('deprecation middleware', () => {
         method: 'GET',
         path: '/api/v1/lookup',
         deprecatedSince: '2026-08-29',
-        sunset: '2027-02-28',
+        sunsetDate: '2027-02-28',
         replacement: '/api/v2/lookup',
         documentation: 'https://docs.example.com/deprecations/lookup',
       },
@@ -71,7 +71,7 @@ describe('deprecation middleware', () => {
 
   it('ignores requests that do not match any deprecation', () => {
     const { res, nextCalled } = run(
-      { method: 'GET', path: '/api/v1/lookup', deprecatedSince: '2026-08-29', sunset: '2027-02-28' },
+      { method: 'GET', path: '/api/v1/lookup', deprecatedSince: '2026-08-29', sunsetDate: '2027-02-28' },
       'GET',
       '/api/v1/active',
     );
@@ -80,13 +80,13 @@ describe('deprecation middleware', () => {
   });
 
   it('matches wildcard paths', () => {
-    const entry = { method: 'GET', path: '/api/v1/receipts/*', deprecatedSince: '2026-08-29', sunset: '2027-02-28' };
+    const entry = { method: 'GET', path: '/api/v1/receipts/*', deprecatedSince: '2026-08-29', sunsetDate: '2027-02-28' };
     const { res } = run(entry, 'GET', '/api/v1/receipts/abc123');
     expect(res.headers.Deprecation).toBeDefined();
   });
 
   it('logs a server-side warning exactly once per endpoint', () => {
-    const entry = { method: 'GET', path: '/api/v1/stats', deprecatedSince: '2026-08-29', sunset: '2027-01-31', replacement: '/api/v2/stats' };
+    const entry = { method: 'GET', path: '/api/v1/stats', deprecatedSince: '2026-08-29', sunsetDate: '2027-01-31', replacement: '/api/v2/stats' };
     const mw = deprecationMiddleware({ registry: [entry] });
     const req = { method: 'GET', path: '/api/v1/stats' };
     mw(req, makeRes(), () => {});
@@ -96,7 +96,7 @@ describe('deprecation middleware', () => {
   });
 
   it('uses method "*" to match any HTTP verb', () => {
-    const entry = { method: '*', path: '/api/v1/legacy', deprecatedSince: '2026-08-29', sunset: '2027-02-28' };
+    const entry = { method: '*', path: '/api/v1/legacy', deprecatedSince: '2026-08-29', sunsetDate: '2027-02-28' };
     const { res } = run(entry, 'DELETE', '/api/v1/legacy');
     expect(res.headers.Deprecation).toBeDefined();
   });
@@ -123,9 +123,27 @@ describe('toHttpDate', () => {
   });
 });
 
+describe('DEPRECATIONS registry', () => {
+  const { DEPRECATIONS } = require('./src/config/deprecations');
+
+  it('defines a sunsetDate for every deprecated entry', () => {
+    for (const entry of DEPRECATIONS) {
+      expect(toHttpDate(entry.sunsetDate)).not.toBeNull();
+    }
+  });
+
+  it('sets the Sunset header to the configured sunsetDate as an RFC 1123 HTTP-date', () => {
+    for (const entry of DEPRECATIONS) {
+      const { res } = run(entry, entry.method, entry.path);
+      expect(res.headers.Sunset).toBe(new Date(entry.sunsetDate).toUTCString());
+      expect(res.headers.Sunset).toMatch(/^[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT$/);
+    }
+  });
+});
+
 describe('findDeprecation', () => {
   it('finds a registered deprecation by method and path', () => {
-    const registry = [{ method: 'POST', path: '/api/v1/payments/bulk', deprecatedSince: '2026-08-29', sunset: '2027-03-31' }];
+    const registry = [{ method: 'POST', path: '/api/v1/payments/bulk', deprecatedSince: '2026-08-29', sunsetDate: '2027-03-31' }];
     expect(findDeprecation('post', '/api/v1/payments/bulk', registry)).toBeDefined();
     expect(findDeprecation('GET', '/api/v1/payments/bulk', registry)).toBeNull();
   });

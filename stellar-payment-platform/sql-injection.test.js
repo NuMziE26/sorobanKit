@@ -170,3 +170,38 @@ describe('#35 Injection safety — POST /register (address conflict check)', () 
     },
   );
 });
+
+// ---------------------------------------------------------------------------
+// #39 — GET /admin/stats/routing assetCode validation
+// ---------------------------------------------------------------------------
+describe('#39 Injection safety — GET /admin/stats/routing (assetCode)', () => {
+  const ADMIN_KEY = 'test-admin-key';
+
+  beforeEach(() => {
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    prisma.payment = { findMany: jest.fn().mockResolvedValue([]) };
+  });
+
+  it.each(INJECTION_PAYLOADS)('rejects assetCode payload %s with 400 INVALID_INPUT', async (payload) => {
+    const res = await request(getApp())
+      .get('/admin/stats/routing')
+      .set('x-api-key', ADMIN_KEY)
+      .query({ assetCode: payload });
+
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(res.body)).toContain('INVALID_INPUT');
+    expect(prisma.payment.findMany).not.toHaveBeenCalled();
+  });
+
+  it('filters by a valid assetCode using a parameterized Prisma where clause', async () => {
+    const res = await request(getApp())
+      .get('/admin/stats/routing')
+      .set('x-api-key', ADMIN_KEY)
+      .query({ assetCode: 'USDC' });
+
+    expect(res.status).toBe(200);
+    expect(prisma.payment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ assetCode: 'USDC' }) }),
+    );
+  });
+});

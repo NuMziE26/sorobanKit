@@ -90,3 +90,40 @@ describe("soft-delete lookup guards", () => {
     );
   });
 });
+
+describe("soft-delete federation guard", () => {
+  beforeEach(() => {
+    jest.resetModules();
+  });
+
+  const address = "GABC1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
+  const users = [
+    { username: "deleted_user*example.com", address, deletedAt: new Date() },
+    { username: "active_user*example.com", address, deletedAt: null },
+  ];
+  const findFirstFromTable = ({ where }) =>
+    Promise.resolve(
+      users.find(
+        (u) =>
+          u.username === String(where.username).split("*")[0] &&
+          (where.deletedAt !== null || u.deletedAt === null),
+      ) || null,
+    );
+
+  test("GET /federation returns 404 for a soft-deleted user", async () => {
+    const { prisma } = require("./prismaClient");
+    const { app } = require("./server");
+    prisma.user.findFirst.mockImplementation(findFirstFromTable);
+
+    const response = await request(app)
+      .get("/federation")
+      .query({ q: "deleted_user*example.com", type: "name" });
+
+    expect(response.status).toBe(404);
+    expect(prisma.user.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ deletedAt: null }),
+      }),
+    );
+  });
+});
