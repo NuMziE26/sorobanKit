@@ -38,6 +38,55 @@ process.env.NODE_ENV = 'test';
 const { app } = require('../server');
 
 describe('Prometheus Metrics Endpoint', () => {
+  describe('GET /metrics — authentication', () => {
+    const VALID_TOKEN = 'test-metrics-secret';
+
+    afterEach(() => {
+      delete process.env.METRICS_TOKEN;
+    });
+
+    test('should return 200 when METRICS_TOKEN is not set (open access)', async () => {
+      delete process.env.METRICS_TOKEN;
+      const response = await request(app).get('/metrics');
+      expect(response.status).toBe(200);
+    });
+
+    test('should return 401 when METRICS_TOKEN is set and no token is provided', async () => {
+      process.env.METRICS_TOKEN = VALID_TOKEN;
+      const response = await request(app).get('/metrics');
+      expect(response.status).toBe(401);
+      expect(response.body.error).toMatch(/unauthorized/i);
+    });
+
+    test('should return 401 when an incorrect Bearer token is provided', async () => {
+      process.env.METRICS_TOKEN = VALID_TOKEN;
+      const response = await request(app)
+        .get('/metrics')
+        .set('Authorization', 'Bearer wrong-token');
+      expect(response.status).toBe(401);
+    });
+
+    test('should return 200 when a correct Bearer token is provided', async () => {
+      process.env.METRICS_TOKEN = VALID_TOKEN;
+      const response = await request(app)
+        .get('/metrics')
+        .set('Authorization', `Bearer ${VALID_TOKEN}`);
+      expect(response.status).toBe(200);
+    });
+
+    test('should return 200 when a correct ?token query param is provided', async () => {
+      process.env.METRICS_TOKEN = VALID_TOKEN;
+      const response = await request(app).get(`/metrics?token=${VALID_TOKEN}`);
+      expect(response.status).toBe(200);
+    });
+
+    test('should return 401 when a wrong ?token query param is provided', async () => {
+      process.env.METRICS_TOKEN = VALID_TOKEN;
+      const response = await request(app).get('/metrics?token=bad-token');
+      expect(response.status).toBe(401);
+    });
+  });
+
   describe('GET /metrics', () => {
     test('should return 200 status code', async () => {
       const response = await request(app).get('/metrics');

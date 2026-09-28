@@ -497,8 +497,34 @@ const registerLocalUser = async ({ username, address, isPrimary = false }) => {
  *     responses:
  *       200:
  *         description: Success
+ *       401:
+ *         description: Unauthorized — missing or invalid METRICS_TOKEN
  */
 app.get("/metrics", async (req, res) => {
+  // Require a bearer token or query-string token when METRICS_TOKEN is set.
+  // This protects operational metrics (memory, CPU, connection counts, etc.)
+  // from unauthenticated access while allowing scraper tools (Prometheus,
+  // Grafana Agent) to authenticate via a simple shared secret.
+  //
+  //   Authorization: Bearer <token>      (preferred)
+  //   ?token=<token>                      (fallback for scrapers that cannot
+  //                                        set headers, e.g. blackbox-exporter)
+  const metricsToken = process.env.METRICS_TOKEN;
+  if (metricsToken) {
+    const authHeader = req.headers["authorization"] || "";
+    const bearerToken = authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : null;
+    const queryToken = req.query.token || null;
+    const provided = bearerToken || queryToken;
+
+    if (!provided || provided !== metricsToken) {
+      return res
+        .status(401)
+        .json({ error: "Unauthorized: missing or invalid metrics token" });
+    }
+  }
+
   try {
     res.set("Content-Type", getContentType());
     const metrics = await getMetrics();
