@@ -172,7 +172,7 @@ const verifyEmailConfirmBodySchema = verifyEmailBodySchema.extend({
 const exportQuerySchema = z
   .object({
     address: z.string({ error: 'address is required' }).trim().min(1, 'address is required'),
-    order: z.enum(['asc', 'desc']).catch('desc'),
+    order: z.enum(['asc', 'desc']).default('desc'),
   })
   .loose();
 
