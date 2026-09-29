@@ -106,7 +106,27 @@ const federationQuerySchema = z
       .string({ error: "Missing 'q' parameter" })
       .trim()
       .min(1, "Missing 'q' parameter")
-      .max(256),
+      .max(256)
+      .superRefine((value, ctx) => {
+        // When the request is a name lookup (no type=id), the q parameter must
+        // follow the federation address format: <username>*<domain>.
+        // Reject queries that are missing the * separator, have an empty
+        // username part (e.g. "*domain"), or have an empty domain part
+        // (e.g. "alice*").  type=id queries pass a raw Stellar address, so
+        // only apply the check when the value looks like a name (contains *).
+        if (value.includes('*')) {
+          const starIndex = value.indexOf('*');
+          const username = value.slice(0, starIndex);
+          const domain = value.slice(starIndex + 1);
+          if (username.length === 0 || domain.length === 0) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message:
+                "Invalid federation address format. Expected <username>*<domain> (e.g. alice*example.com)",
+            });
+          }
+        }
+      }),
     type: z
       .enum(['id', 'name'], "Unsupported query type. Supported types: 'id', 'name'")
       .optional(),

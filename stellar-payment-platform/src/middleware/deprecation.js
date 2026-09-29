@@ -103,6 +103,21 @@ const deprecationMiddleware = (options = {}) => {
       );
     }
 
+    // Always log deprecated endpoint calls so operators can measure consumer
+    // reliance on soon-to-be-removed routes and know when it is safe to remove them.
+    logger.warn(
+      {
+        type: 'deprecation',
+        method: req.method,
+        path: req.path,
+        correlationId: req.correlationId,
+        sunset: sunset || null,
+        replacement: entry.replacement || null,
+        documentation: entry.documentation || null,
+      },
+      `Deprecated endpoint called: ${req.method} ${req.path}${entry.replacement ? ` — migrate to ${entry.replacement}` : ''}`,
+    );
+
     if (sunset) {
       const message = entry.replacement
         ? `Deprecated endpoint ${req.method} ${req.path} will be removed after ${sunset}; migrate to ${entry.replacement}.`

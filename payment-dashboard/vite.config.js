@@ -18,30 +18,27 @@ export default defineConfig(({ mode }) => {
         exclude: ['buffer'],
       }),
     ],
-    resolve: {
-      dedupe: [
-        // The bindings package lives outside the dashboard root (packages/types),
-        // so its own `@stellar/stellar-sdk` / `buffer` imports would otherwise
-        // resolve against the repo root. Dedupe forces every importer, including
-        // the linked bindings, to use the dashboard's installed copies.
-        '@stellar/stellar-sdk',
-        'buffer',
-      ],
-    },
-    define: {
-      global: 'globalThis',
-    },
-    build: {
-      chunkSizeWarningLimit: 1100,
-    },
-    server: {
-      port: 3000,
-      proxy: {
-        '/api': {
-          target: 'http://127.0.0.1:5000',
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, ''),
-        },
+  },
+  define: {
+    global: 'globalThis',
+  },
+  build: {
+    chunkSizeWarningLimit: 1100,
+    // Files in public/ (robots.txt, sitemap.xml, favicons, …) are copied
+    // verbatim to the build output root by Vite's default behaviour.
+    // The explicit `publicDir` declaration below makes this intent clear and
+    // ensures the setting is not accidentally overridden.
+  },
+  // Explicitly declare the public assets directory so it is obvious which
+  // static files (robots.txt, sitemap.xml, …) will be copied to dist/.
+  publicDir: 'public',
+  server: {
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:5000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
     html: {
