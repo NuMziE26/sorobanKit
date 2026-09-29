@@ -639,3 +639,7 @@ Upon successful deployment, the tool automatically updates the contract address 
 
 See [LICENSE](LICENSE).
 
+## Handsoff notes
+
+<!-- handsoff-issue-33 -->
+- #33: GET /federation does not set Cache-Control headers, causing aggressive CDN caching
