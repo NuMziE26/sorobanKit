@@ -7,6 +7,8 @@ Use this checklist for every deployment. Do not skip steps.
 - [ ] All changes merged to `main` and CI is green
 - [ ] Version/tag decided and changelog updated
 - [ ] Required secrets and environment variables are configured
+- [ ] Confirm `MIGRATION_POLICY: strict` is set in `render.yaml` so production
+      deploys fail fast on pending migrations instead of starting in `warn` mode
 
 ## Testnet Deployment
 
