@@ -183,6 +183,32 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+// WebhookEvent tracks every individual webhook delivery attempt end-to-end,
+// from initial queueing through retries to final delivery or dead-letter
+// promotion. The worker polls by status on every cycle (pending → delivered /
+// failed / dead_letter), so @@index([status]) prevents a full table scan
+// that would grow linearly with event volume.
+model WebhookEvent {
+  id              String    @id @default(uuid())
+  eventType       String    @map("event_type")
+  payload         String    // JSON-serialised event payload
+  merchantId      String?   @map("merchant_id")
+  // Lifecycle: pending → delivered | failed → dead_letter
+  status          String    @default("pending")
+  attemptCount    Int       @default(0) @map("attempt_count")
+  lastError       String?   @map("last_error")
+  deliveredAt     DateTime? @map("delivered_at")
+  // When the DLQ worker promotes a failed event it records the source row id
+  // here so the two records can be correlated for replay.
+  originalEventId String?   @map("original_event_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  // The worker's polling query is always WHERE status = <value>, so a single
+  // index on status keeps those scans efficient regardless of table size.
+  @@index([status])
+  @@map("webhook_events")
+}
+
 // #599 — Self-service activity trail. Records the account-affecting events a
 // user can review for their own username through
 // GET /users/:username/activity. Rows go away with the user so a purge does

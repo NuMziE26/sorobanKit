@@ -1,5 +1,7 @@
 'use strict';
 
+const { logger } = require('./logger');
+
 const CURSOR_VERSION = 'v1';
 
 function parsePagination(query, defaultLimit = 10, maxLimit = 100) {
@@ -9,7 +11,12 @@ function parsePagination(query, defaultLimit = 10, maxLimit = 100) {
   return { page, limit, skip };
 }
 
-function paginatedResponse(data, totalCount, { page, limit }) {
+function paginatedResponse(data, rawTotal, { page, limit }) {
+  // Guard against negative counts from race conditions in Prisma count queries.
+  if (rawTotal < 0) {
+    logger.warn('[pagination] Received negative total count from Prisma; clamping to 0', { rawTotal });
+  }
+  const totalCount = Math.max(0, rawTotal);
   const totalPages = Math.ceil(totalCount / limit);
   return {
     data,

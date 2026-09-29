@@ -10,6 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { execSync } = require('child_process');
 
 // ── Network Configurations ───────────────────────────────────────────────────
@@ -60,6 +61,95 @@ const DEFAULT_OPTIMIZED_WASM_PATH = path.join(
   'payment_router.optimized.wasm'
 );
 
+// ── WASM Hash Verification ───────────────────────────────────────────────────
+
+/**
+ * Computes the SHA-256 hash of a local WASM file.
+ *
+ * @param {string} wasmPath - Absolute path to the .wasm file.
+ * @returns {string} Lowercase hex-encoded SHA-256 digest.
+ */
+const computeLocalWasmHash = (wasmPath) => {
+  const buffer = fs.readFileSync(wasmPath);
+  return crypto.createHash('sha256').update(buffer).digest('hex');
+};
+
+/**
+ * Retrieves the on-chain WASM hash for an uploaded contract via the Stellar RPC.
+ *
+ * @param {string} wasmHash - Hex-encoded hash returned by the upload step.
+ * @param {object} network - Network configuration object.
+ * @returns {Promise<string>} Lowercase hex-encoded on-chain hash.
+ */
+const fetchOnChainWasmHash = async (wasmHash, network) => {
+  const response = await fetch(network.rpcUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'getContractWasmByHash',
+      params: { hash: wasmHash },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`RPC request failed with status ${response.status}`);
+  }
+
+  const payload = await response.json();
+  if (payload.error) {
+    throw new Error(`RPC error: ${payload.error.message || JSON.stringify(payload.error)}`);
+  }
+
+  const result = payload.result;
+  const onChainHash =
+    typeof result === 'string'
+      ? result
+      : result && (result.hash || result.wasmHash || result.wasm_hash);
+
+  if (!onChainHash) {
+    throw new Error('RPC response did not include a WASM hash');
+  }
+
+  return String(onChainHash).toLowerCase();
+};
+
+/**
+ * Verifies that the uploaded WASM hash matches the local file's SHA-256.
+ * Aborts the process with a non-zero exit code if they differ.
+ *
+ * @param {string} wasmPath - Local .wasm file path.
+ * @param {string} uploadedHash - Hash returned by the upload step.
+ * @param {object} network - Network configuration object.
+ * @param {object} [options]
+ * @returns {Promise<boolean>} True when the hashes match (or check skipped).
+ */
+const verifyWasmHash = async (wasmPath, uploadedHash, network, options = {}) => {
+  const expectedHash = computeLocalWasmHash(wasmPath);
+
+  if (options.skipHashCheck) {
+    console.warn('⚠️  --skip-hash-check enabled: skipping WASM hash verification.');
+    console.warn(`   Expected (local) hash: ${expectedHash}`);
+    return true;
+  }
+
+  const actualHash = await fetchOnChainWasmHash(uploadedHash, network);
+
+  console.log(`🔎 Expected WASM hash (local):  ${expectedHash}`);
+  console.log(`🔎 Actual WASM hash (on-chain): ${actualHash}`);
+
+  if (expectedHash !== actualHash) {
+    console.error('❌ WASM hash mismatch: the uploaded contract does not match the local file.');
+    console.error(`   Expected: ${expectedHash}`);
+    console.error(`   Actual:   ${actualHash}`);
+    process.exit(1);
+  }
+
+  console.log('✅ WASM hash verified: on-chain hash matches local file.');
+  return true;
+};
+
 // ── CLI Argument Parser ──────────────────────────────────────────────────────
 
 /**
@@ -82,6 +172,7 @@ const parseArgs = (argv = process.argv.slice(2)) => {
     wasmPath: null,
     dryRun: false,
     skipBuild: false,
+    skipHashCheck: false,
     envFiles: [
       path.join(ROOT_DIR, 'stellar-payment-platform', '.env'),
       path.join(ROOT_DIR, 'payment-dashboard', '.env'),
@@ -122,6 +213,8 @@ const parseArgs = (argv = process.argv.slice(2)) => {
       options.dryRun = true;
     } else if (arg === '--skip-build') {
       options.skipBuild = true;
+    } else if (arg === '--skip-hash-check') {
+      options.skipHashCheck = true;
     } else if (arg === '--env-file') {
       options.envFiles.push(path.resolve(argv[++i]));
     } else if (!arg.startsWith('-')) {

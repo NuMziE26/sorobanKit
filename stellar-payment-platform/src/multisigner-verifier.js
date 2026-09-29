@@ -8,19 +8,54 @@
 
 const { loadAccount, HORIZON_BASE } = require('./services/stellarService');
 
+// Timeout for individual Horizon account-fetch calls (ms).
+// Falls back to the circuit-breaker timeout when not set, but an explicit cap
+// here ensures a hanging Horizon request is cancelled well before it can
+// exhaust the Node.js event loop under concurrent load.
+const HORIZON_FETCH_TIMEOUT_MS =
+  parseInt(process.env.HORIZON_FETCH_TIMEOUT_MS, 10) || 5000;
+
+/**
+ * Races a promise against a timeout, rejecting with a descriptive error when
+ * the deadline is reached before the promise settles.
+ *
+ * @param {Promise<*>} promise - The promise to race.
+ * @param {number} ms - Timeout in milliseconds.
+ * @param {string} label - Short description used in the rejection message.
+ * @returns {Promise<*>}
+ */
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms}ms`)),
+      ms,
+    );
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /**
  * Fetches account details from Horizon network including signer configuration.
  * Uses the circuit-breaker–protected `loadAccount` helper so a Horizon outage
  * fast-fails instead of hanging until the TCP timeout.
  *
+ * An explicit per-call timeout (HORIZON_FETCH_TIMEOUT_MS, default 5 000 ms)
+ * is applied on top of the circuit-breaker timeout so a single slow Horizon
+ * response cannot block the event loop indefinitely.
+ *
  * @param {string} accountId - The Stellar account public key
  * @param {string} horizonUrl - Optional custom Horizon URL (unused; kept for API compat)
  * @returns {Promise<Object>} Account object with signers array and thresholds
- * @throws {Error} If account not found or network error
+ * @throws {Error} If account not found, network error, or fetch times out
  */
 async function fetchAccountSigners(accountId, _horizonUrl) {
   try {
-    const account = await loadAccount(accountId);
+    const account = await withTimeout(
+      loadAccount(accountId),
+      HORIZON_FETCH_TIMEOUT_MS,
+      `Horizon loadAccount(${accountId})`,
+    );
 
     return {
       accountId: account.id,
@@ -199,4 +234,7 @@ module.exports = {
   verifyMultiSignerThreshold,
   isSingleSignerAccount,
   verifyMasterSignature,
+  // Exported for testing
+  withTimeout,
+  HORIZON_FETCH_TIMEOUT_MS,
 };

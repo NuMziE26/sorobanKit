@@ -13,7 +13,7 @@
  */
 const express = require('express');
 const { invalidateFederationCache } = require('../../federationCache');
-const { invalidateStatsCache } = require('../../cache/statsCache');
+const { invalidateStatsCache, getCachedStats, buildRoutingStatsCacheKey } = require('../../cache/statsCache');
 const { asyncHandler } = require('../../middleware/asyncHandler');
 const { validateSchema } = require('../../middleware/validateSchema');
 const {
@@ -342,13 +342,27 @@ router.post('/admin/block', adminAuth, asyncHandler(async (req, res, next) => {
       const { startDate, endDate, groupBy, interval, assetCode } = req.query;
       const { prisma } = getPrisma();
 
-      const stats = await getRoutingStats({
-        prisma,
+      const resolvedGroupBy = interval || groupBy || 'day';
+
+      const cacheKey = buildRoutingStatsCacheKey({
         startDate,
         endDate,
-        groupBy: interval || groupBy || 'day',
+        groupBy: resolvedGroupBy,
         assetCode,
       });
+
+      const stats = await getCachedStats(
+        redisClient,
+        () =>
+          getRoutingStats({
+            prisma,
+            startDate,
+            endDate,
+            groupBy: resolvedGroupBy,
+            assetCode,
+          }),
+        { key: cacheKey },
+      );
 
       return res.status(200).json({
         success: true,

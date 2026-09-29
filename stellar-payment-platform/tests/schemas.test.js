@@ -119,18 +119,59 @@ describe('request schemas', () => {
       expect(usersQuerySchema.parse({ page: '3', limit: '5' })).toMatchObject({ page: 3, limit: 5 });
     });
 
+    // ── Acceptance-criteria boundary cases ────────────────────────────────────
+
+    test('?page=-1 is clamped to page=1', () => {
+      expect(usersQuerySchema.parse({ page: '-1' })).toMatchObject({ page: 1 });
+    });
+
+    test('?limit=0 is clamped to limit=1', () => {
+      expect(usersQuerySchema.parse({ limit: '0' })).toMatchObject({ limit: 1 });
+    });
+
+    test('?limit=1000 is clamped to limit=100', () => {
+      expect(usersQuerySchema.parse({ limit: '1000' })).toMatchObject({ limit: 100 });
+    });
+
+    test('missing page defaults to 1', () => {
+      expect(usersQuerySchema.parse({})).toMatchObject({ page: 1 });
+    });
+
+    test('missing limit defaults to 10', () => {
+      expect(usersQuerySchema.parse({})).toMatchObject({ limit: 10 });
+    });
+
+    // ── Additional edge cases ─────────────────────────────────────────────────
+
     test.each([
       ['clamps limit above the maximum', { limit: '1000' }, { limit: 100 }],
       ['clamps limit below the minimum', { limit: '-5' }, { limit: 1 }],
+      ['clamps limit at exactly 0', { limit: '0' }, { limit: 1 }],
+      ['clamps limit at exactly 1 (boundary, valid)', { limit: '1' }, { limit: 1 }],
+      ['clamps limit at exactly 100 (boundary, valid)', { limit: '100' }, { limit: 100 }],
+      ['clamps limit at exactly 101', { limit: '101' }, { limit: 100 }],
       ['falls back on non-numeric limit', { limit: 'abc' }, { limit: 10 }],
       ['falls back on non-numeric page', { page: 'abc' }, { page: 1 }],
       ['clamps page below the minimum', { page: '0' }, { page: 1 }],
+      ['clamps page at -1', { page: '-1' }, { page: 1 }],
+      ['accepts page=1 (boundary, valid)', { page: '1' }, { page: 1 }],
+      ['accepts page=2', { page: '2' }, { page: 2 }],
+      ['falls back on empty string limit', { limit: '' }, { limit: 10 }],
+      ['falls back on empty string page', { page: '' }, { page: 1 }],
     ])('%s', (_label, input, expected) => {
       expect(usersQuerySchema.parse(input)).toMatchObject(expected);
     });
 
     test('applies the payments endpoint default of 25', () => {
       expect(accountPaymentsQuerySchema.parse({})).toMatchObject({ limit: 25, order: 'desc' });
+    });
+
+    test('payments endpoint clamps limit=0 to 1', () => {
+      expect(accountPaymentsQuerySchema.parse({ limit: '0' })).toMatchObject({ limit: 1 });
+    });
+
+    test('payments endpoint clamps limit=1000 to 100', () => {
+      expect(accountPaymentsQuerySchema.parse({ limit: '1000' })).toMatchObject({ limit: 100 });
     });
 
     test('falls back to desc for an unknown order', () => {

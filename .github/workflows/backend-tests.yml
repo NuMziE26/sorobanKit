@@ -27,6 +27,9 @@ jobs:
         run: npm install --legacy-peer-deps
 
       # Coverage thresholds live in package.json; failing below them fails the PR.
+      # E2E isolation: suites in tests/e2e prefix every record with a per-run
+      # `e2etest<uuid>` tag and delete them in afterAll, so repeated runs need
+      # no database reset.
       - name: Run backend unit tests (with coverage thresholds)
         run: npm run test:coverage --prefix stellar-payment-platform
 
