@@ -3,12 +3,9 @@
 /**
  * src/middleware/security.js
  *
- * Security headers middleware configured with strict Content Security Policy (CSP)
- * to deny all framing, restrict script/style sources, and remove identifying headers.
- *
- * A Permissions-Policy header is also set to disable browser APIs that this
- * application never needs (camera, microphone, geolocation), preventing
- * accidental capability grant to third-party scripts.
+ * Security headers middleware configured with strict Content Security Policy
+ * (CSP), a Permissions-Policy to deny sensitive browser APIs the application
+ * never needs, and other hardening headers via Helmet.
  */
 
 const helmet = require('helmet');
@@ -26,19 +23,6 @@ const cspDirectives = {
   formAction: ["'self'"],
 };
 
-/**
- * Permissions-Policy value applied to every response.
- *
- * Each directive uses an empty allowlist `()` which means the feature is
- * blocked for this origin and all embedded frames — no page served by this
- * API may access the camera, microphone, or geolocation APIs.
- *
- * Extend this string if a future feature legitimately needs a browser
- * permission (e.g. payment handlers), but keep the default posture as
- * restrictive as possible.
- */
-const permissionsPolicy = 'camera=(), microphone=(), geolocation=()';
-
 const helmetMiddleware = helmet({
   contentSecurityPolicy: {
     directives: cspDirectives,
@@ -54,23 +38,27 @@ const helmetMiddleware = helmet({
 });
 
 /**
- * Composed security middleware that applies Helmet headers and then sets
- * the Permissions-Policy header.
+ * Sets a Permissions-Policy header that denies browser APIs the payment
+ * platform never needs.  This prevents an XSS payload from silently accessing
+ * the camera, microphone, or geolocation of a user who has previously granted
+ * those permissions to the domain.
  *
- * Using a single function keeps the call-site (`app.use(securityMiddleware)`)
- * unchanged while ensuring both steps always run together.
- *
- * @param {import('express').Request} req
- * @param {import('express').Response} res
- * @param {import('express').NextFunction} next
+ * The header is applied after Helmet so it cannot be overwritten by Helmet's
+ * own processing.
  */
-const securityMiddleware = (req, res, next) => {
-  helmetMiddleware(req, res, (err) => {
-    if (err) return next(err);
-    res.setHeader('Permissions-Policy', permissionsPolicy);
-    next();
-  });
+const permissionsPolicy = (_req, res, next) => {
+  res.setHeader(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+  );
+  next();
 };
+
+/**
+ * Combined security middleware: Helmet hardening + Permissions-Policy.
+ * Mount this once at the top of the middleware stack.
+ */
+const securityMiddleware = [helmetMiddleware, permissionsPolicy];
 
 module.exports = {
   securityMiddleware,

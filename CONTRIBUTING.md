@@ -1,116 +1,88 @@
-# Contributing to Stellar Tags
+# Contributing
 
-Thank you for contributing! The guidelines below help keep the codebase
-consistent, secure, and easy to review.
+Thanks for your interest in contributing! This guide covers local setup, running the test suites, and pull request conventions.
 
-## Table of contents
+## Prerequisites
 
-- [Development setup](#development-setup)
-- [Commit conventions](#commit-conventions)
-- [Pull requests](#pull-requests)
-- [Secret scanning policy](#secret-scanning-policy)
-- [Tests](#tests)
+| Tool | Version | Notes |
+| --- | --- | --- |
+| Node.js | >= 18.x (LTS) | Required for the frontend and tooling |
+| npm | >= 9.x | Ships with Node 18+ |
+| Rust | >= 1.74 (stable) | Required for the Soroban contracts |
+| Docker | >= 24.x | Required for the local stack |
+| Docker Compose | >= 2.x | Bundled with modern Docker Desktop |
+| Stellar CLI | >= 21.x | Required to build/deploy contracts |
 
----
-
-## Development setup
-
-See [README.md](README.md) for step-by-step instructions on running the
-frontend, backend, and smart contract locally.
-
----
-
-## Commit conventions
-
-Use short, imperative-mood commit messages:
-
-```
-fix: reject multi-sig accounts with zero-weight signers
-feat: add get_version() to PaymentRouter contract
-```
-
----
-
-## Pull requests
-
-- Keep PRs focused — one logical change per PR.
-- Update relevant tests. CI blocks merges when coverage drops below the
-  configured floor.
-- Rebase against `main` before requesting a review.
-
----
-
-## Secret scanning policy
-
-### How it works
-
-Every push and pull request is scanned by
-[TruffleHog](https://github.com/trufflesecurity/trufflehog) via the
-`.github/workflows/secret-scan.yml` workflow. The scanner runs with
-`--fail`, which means **the CI check fails and blocks the PR** if any
-live credential is found in the diff.
-
-The scan covers the incremental diff only (from the repository default
-branch to `HEAD`), so it is fast and targeted regardless of history length.
-
-### What gets flagged
-
-TruffleHog recognises hundreds of credential patterns, including:
-
-- API keys and tokens (Stripe, Twilio, GitHub, AWS, etc.)
-- Private keys (PEM, SSH, Stellar secret seeds starting with `S`)
-- Database connection strings containing passwords
-- JWT secrets and signing keys
-
-### What to do if the scan fails
-
-1. **Do not force-push secrets into history** — remove the secret from the
-   branch with `git rebase -i` or `git filter-repo` before the PR is merged.
-2. **Rotate the credential immediately** — assume it has been compromised
-   once it appears in a diff, even in a private repository.
-3. **Add a `.env` entry** — secrets belong in environment variables, not
-   source files. See `.env.example` for the required variables.
-
-### Test fixtures and false positives
-
-Deliberately invalidated credentials used in tests (e.g. randomly generated
-strings that match a pattern but have never been issued) must be listed in
-`.github/trufflehog-ignore.txt` with a comment explaining why each entry is
-safe to exclude.
-
-The ignore file already excludes paths that match `.*test.*`, `.*spec.*`,
-`tests/.*`, and `__tests__/.*`. If you need to add a new exception:
-
-1. Open `.github/trufflehog-ignore.txt`.
-2. Add a regex that matches only the relevant path (not the whole repo).
-3. Add a comment on the line above documenting what the entry covers and
-   why the credential is invalid.
-4. Include the change in the same PR as the test that requires it.
-
-### Stellar secret seeds
-
-Stellar secret seeds (strings starting with `S` and 56 characters long)
-are particularly sensitive because they grant direct access to on-chain
-funds. Never commit a real seed. Use the testnet faucet to generate
-throwaway keypairs for tests:
+Install the Stellar CLI with:
 
 ```bash
-stellar keys generate --network testnet test-key
+cargo install --locked stellar-cli --features opt
 ```
 
----
+## Environment Setup
 
-## Tests
+1. Clone the repository and install frontend dependencies:
+
+   ```bash
+   git clone <repo-url>
+   cd <repo>
+   npm install
+   ```
+
+2. Copy the example environment file and fill in the values:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Key variables:
+
+   | Variable | Description |
+   | --- | --- |
+   | `DATABASE_URL` | Postgres connection string used by the backend |
+   | `STELLAR_NETWORK` | `testnet` or `mainnet` |
+   | `HORIZON_URL` | Horizon endpoint for the target network |
+   | `SOROBAN_RPC_URL` | Soroban RPC endpoint |
+   | `CONTRACT_ID` | Deployed contract ID |
+   | `VITE_API_URL` | Backend URL consumed by the frontend |
+
+3. Start the local stack with Docker Compose. Profiles let you run only what you need:
+
+   | Profile | Services | Use case |
+   | --- | --- | --- |
+   | `default` | backend, postgres | Backend development |
+   | `frontend` | frontend, backend, postgres | Full-stack development |
+   | `contracts` | stellar quickstart, postgres | Contract development |
+   | `all` | every service | End-to-end testing |
+
+   ```bash
+   docker compose --profile frontend up --build
+   ```
+
+## Running Tests
+
+### Frontend
 
 ```bash
-# Smart contract
-cd payment_router && cargo test
-
-# Server
-cd stellar-payment-platform && npm test
-
-# Frontend
-cd payment-dashboard && npm test
+npm test
 ```
 
-CI runs the full suite on every push. See the README for coverage thresholds.
+### Backend
+
+```bash
+cargo test --manifest-path backend/Cargo.toml
+```
+
+### Contracts
+
+```bash
+cargo test --manifest-path contracts/Cargo.toml
+```
+
+## Pull Request Conventions
+
+- Branch from `main` and keep changes focused on a single issue.
+- Use conventional commit messages, e.g. `fix: handle Horizon 404 responses`.
+- Ensure all relevant test suites pass before opening a PR.
+- Reference the issue being addressed in the PR description (`Closes #<issue>`).
+- Keep PRs small and reviewable; avoid unrelated refactors.

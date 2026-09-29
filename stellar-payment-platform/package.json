@@ -29,10 +29,10 @@
     "coverageReporters": ["text", "lcov", "json-summary"],
     "coverageThreshold": {
       "global": {
-        "statements": 68,
-        "branches": 58,
-        "functions": 68,
-        "lines": 68
+        "statements": 78,
+        "branches": 68,
+        "functions": 78,
+        "lines": 78
       }
     },
     "setupFiles": ["./jest.setup.js"]

@@ -32,12 +32,18 @@ const sanitized = (schema) => schema.transform(sanitizeString);
 
 // Query values arrive as strings. Page and limit clamp rather than reject, so
 // `?limit=1000` keeps returning the maximum page size instead of erroring.
+// When a value is absent (undefined) the .default() kicks in after the
+// preprocess step, so missing params resolve to the documented defaults
+// (page=1, limit=10) without any extra branching in the handlers.
 const clampedInt = (fallback, min, max) =>
-  z.preprocess((value) => {
-    const parsed = parseInt(value, 10);
-    if (Number.isNaN(parsed)) return fallback;
-    return Math.min(max, Math.max(min, parsed));
-  }, z.number().int());
+  z
+    .preprocess((value) => {
+      if (value === undefined || value === null || value === '') return undefined;
+      const parsed = parseInt(value, 10);
+      if (Number.isNaN(parsed)) return undefined;
+      return Math.min(max, Math.max(min, parsed));
+    }, z.number().int().min(min).max(max).optional())
+    .default(fallback);
 
 const paginationFields = {
   page: clampedInt(1, 1, Number.MAX_SAFE_INTEGER),
@@ -100,7 +106,27 @@ const federationQuerySchema = z
       .string({ error: "Missing 'q' parameter" })
       .trim()
       .min(1, "Missing 'q' parameter")
-      .max(256),
+      .max(256)
+      .superRefine((value, ctx) => {
+        // When the request is a name lookup (no type=id), the q parameter must
+        // follow the federation address format: <username>*<domain>.
+        // Reject queries that are missing the * separator, have an empty
+        // username part (e.g. "*domain"), or have an empty domain part
+        // (e.g. "alice*").  type=id queries pass a raw Stellar address, so
+        // only apply the check when the value looks like a name (contains *).
+        if (value.includes('*')) {
+          const starIndex = value.indexOf('*');
+          const username = value.slice(0, starIndex);
+          const domain = value.slice(starIndex + 1);
+          if (username.length === 0 || domain.length === 0) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message:
+                "Invalid federation address format. Expected <username>*<domain> (e.g. alice*example.com)",
+            });
+          }
+        }
+      }),
     type: z
       .enum(['id', 'name'], "Unsupported query type. Supported types: 'id', 'name'")
       .optional(),
@@ -138,7 +164,7 @@ const usersQuerySchema = z
  * StrKey in the handler, which knows the real Stellar key format. */
 const accountPaymentsQuerySchema = z
   .object({
-    limit: clampedInt(25, 1, 100),
+    limit: clampedInt(25, 1, 100), // default 25, min 1, max 100
     cursor: z.string().trim().min(1).optional(),
     order: z.enum(['asc', 'desc']).catch('desc'),
   })
@@ -172,7 +198,7 @@ const verifyEmailConfirmBodySchema = verifyEmailBodySchema.extend({
 const exportQuerySchema = z
   .object({
     address: z.string({ error: 'address is required' }).trim().min(1, 'address is required'),
-    order: z.enum(['asc', 'desc']).catch('desc'),
+    order: z.enum(['asc', 'desc']).default('desc'),
   })
   .loose();
 
