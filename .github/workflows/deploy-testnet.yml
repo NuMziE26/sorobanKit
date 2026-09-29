@@ -8,6 +8,9 @@ jobs:
   deploy-testnet:
     name: Deploy to Testnet
     runs-on: ubuntu-latest
+    # Manual approval gate: requires a reviewer configured on the `testnet`
+    # environment in repository settings before any deploy steps run.
+    environment: testnet
     defaults:
       run:
         working-directory: ./payment_router

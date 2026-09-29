@@ -142,3 +142,32 @@ describe('constants', () => {
     expect(FEDERATION_CACHE_PREFIX).toBe('federation');
   });
 });
+describe('federation cache invalidation on deregistration (src/cache.js)', () => {
+  const {
+    cache,
+    federationNameKey,
+    federationLookupCached,
+    invalidateFederationCache: invalidateLocalFederationCache,
+  } = require('../src/cache');
+
+  afterEach(() => cache.flushAll());
+
+  it('serves from the DB, not the cache, after a username is deregistered', async () => {
+    const db = { 'alice': { stellar_address: 'alice*localhost', account_id: 'GALICE' } };
+    const fetchFn = jest.fn(async () => db.alice || null);
+    const key = federationNameKey('alice');
+
+    // Create + cache
+    expect(await federationLookupCached(key, fetchFn)).toEqual(db.alice);
+    expect(await federationLookupCached(key, fetchFn)).toEqual(db.alice);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+
+    // Deregister
+    delete db.alice;
+    invalidateLocalFederationCache('alice', 'GALICE');
+
+    // Re-query hits the DB and sees the deregistration
+    expect(await federationLookupCached(key, fetchFn)).toBeNull();
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+});

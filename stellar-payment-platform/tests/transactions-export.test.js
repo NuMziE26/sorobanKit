@@ -144,9 +144,16 @@ describe('GET /transactions/export', () => {
       expect(chain.order).toHaveBeenCalledWith('asc');
     });
 
-    test('defaults to desc for an unknown order', async () => {
+    test('passes desc order through', async () => {
       const chain = mockPages([[record(1)]]);
-      await request(app).get(`/api/v1/transactions/export?address=${ADDRESS}&order=sideways`);
+      await request(app).get(`/api/v1/transactions/export?address=${ADDRESS}&order=desc`);
+
+      expect(chain.order).toHaveBeenCalledWith('desc');
+    });
+
+    test('defaults to desc when order is omitted', async () => {
+      const chain = mockPages([[record(1)]]);
+      await request(app).get(`/api/v1/transactions/export?address=${ADDRESS}`);
 
       expect(chain.order).toHaveBeenCalledWith('desc');
     });
@@ -240,6 +247,52 @@ describe('GET /transactions/export', () => {
       const row = res.text.trim().split('\r\n')[1];
 
       expect(row).toBe('ca-1,2026-07-30T00:00:00Z,create_account,GFUNDER,GNEW,100.0000000,native,,,hash-ca');
+    });
+  });
+
+  describe('order parameter validation', () => {
+    test('rejects an invalid order value with 400 INVALID_INPUT', async () => {
+      const res = await request(app).get(`/api/v1/transactions/export?address=${ADDRESS}&order=random`);
+
+      expect(res.status).toBe(400);
+      expect(res.body).toMatchObject({
+        success: false,
+        error: { code: 'INVALID_INPUT' },
+      });
+    });
+
+    test('rejects other arbitrary order strings with 400 INVALID_INPUT', async () => {
+      const res = await request(app).get(`/api/v1/transactions/export?address=${ADDRESS}&order=sideways`);
+
+      expect(res.status).toBe(400);
+      expect(res.body).toMatchObject({
+        success: false,
+        error: { code: 'INVALID_INPUT' },
+      });
+    });
+
+    test('accepts order=asc and forwards it to Horizon', async () => {
+      const chain = mockPages([[record(1)]]);
+      const res = await request(app).get(`/api/v1/transactions/export?address=${ADDRESS}&order=asc`);
+
+      expect(res.status).toBe(200);
+      expect(chain.order).toHaveBeenCalledWith('asc');
+    });
+
+    test('accepts order=desc and forwards it to Horizon', async () => {
+      const chain = mockPages([[record(1)]]);
+      const res = await request(app).get(`/api/v1/transactions/export?address=${ADDRESS}&order=desc`);
+
+      expect(res.status).toBe(200);
+      expect(chain.order).toHaveBeenCalledWith('desc');
+    });
+
+    test('defaults to desc when order is missing', async () => {
+      const chain = mockPages([[record(1)]]);
+      const res = await request(app).get(`/api/v1/transactions/export?address=${ADDRESS}`);
+
+      expect(res.status).toBe(200);
+      expect(chain.order).toHaveBeenCalledWith('desc');
     });
   });
 

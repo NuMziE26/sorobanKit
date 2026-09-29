@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /register
+Disallow: /history
+
+Sitemap: https://stellar-tags.vercel.app/sitemap.xml

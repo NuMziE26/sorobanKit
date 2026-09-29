@@ -11,6 +11,27 @@ const AnalyticsPage = lazy(() => import('./views/AnalyticsPage.jsx'));
 const HistoryPage = lazy(() => import('./views/HistoryPage.jsx'));
 const RegistrationPage = lazy(() => import('./views/RegistrationPage.jsx'));
 
+function generateRequestId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = (Math.random() * 16) | 0;
+    const value = char === 'x' ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
+function withRequestId(input, init = {}) {
+  const headers = new Headers(init.headers || {});
+  if (!headers.has('X-Request-ID')) {
+    headers.set('X-Request-ID', generateRequestId());
+  }
+
+  return fetch(input, { ...init, headers });
+}
+
 function ViewFallback({ label = 'Loading view...' }) {
   return (
     <div className="route-fallback" role="status" aria-live="polite">
@@ -55,7 +76,7 @@ const [activeView, setActiveView] = useState('dashboard')
               : addressResponse.address;
             
             // Now that publicKey is officially created, we can fetch the user
-            const dbResponse = await fetch(`${API_BASE}/lookup?address=${encodeURIComponent(publicKey)}`);
+            const dbResponse = await withRequestId(`${API_BASE}/lookup?address=${encodeURIComponent(publicKey)}`);
             
             if (dbResponse.ok) {
               setRegistrationState("existing");
@@ -97,7 +118,7 @@ const [activeView, setActiveView] = useState('dashboard')
     setIsRefreshing(true);
     setBalanceError("");
     try {
-      const response = await fetch(`${HORIZON_BASE}/accounts/${userPublicKey}`);
+      const response = await withRequestId(`${HORIZON_BASE}/accounts/${userPublicKey}`);
       if (!response.ok) {
         throw new Error(`Horizon error (${response.status}).`);
       }
@@ -270,91 +291,8 @@ const [activeView, setActiveView] = useState('dashboard')
     );
   }
 
-  if (activeView === "analytics") {
-    return (
-      <>
-        {isOffline && (
-          <div
-            style={{
-              backgroundColor: "#DC2626",
-              color: "#FFFFFF",
-              padding: "12px 16px",
-              textAlign: "center",
-              fontWeight: "500",
-              fontSize: "14px",
-              position: "sticky",
-              top: 0,
-              zIndex: 1000,
-            }}
-          >
-            ⚠️ You are currently offline. Transactions will fail.
-          </div>
-        )}
-        <Suspense fallback={<ViewFallback label="Loading analytics..." />}>
-
-        <AnalyticsPage
-          userPublicKey={userPublicKey}
-          onConnectWallet={handleConnectWallet}
-          onDisconnectWallet={handleDisconnectWallet}
-          onDashboardClick={() => handleNavigate("dashboard")}
-          onHistoryClick={() => handleNavigate("history")}
-          onHelpClick={() => handleNavigate("help")}
-          onRegisterClick={() => handleNavigate("register")}
-          canRegister={registrationState === "new"}
-        />
-        </Suspense>
-      </>
-    );
-  }
-
-  if (activeView === "history") {
-    return (
-      <>
-        {isOffline && (
-          <div
-            style={{
-              backgroundColor: "#DC2626",
-              color: "#FFFFFF",
-              padding: "12px 16px",
-              textAlign: "center",
-              fontWeight: "500",
-              fontSize: "14px",
-              position: "sticky",
-              top: 0,
-              zIndex: 1000,
-            }}
-          >
-            ⚠️ You are currently offline. Transactions will fail.
-          </div>
-        )}
-        <Suspense fallback={<ViewFallback label="Loading history..." />}>
-
-        <HistoryPage
-          userPublicKey={userPublicKey}
-          setUserPublicKey={setUserPublicKey}
-          onConnectWallet={handleConnectWallet}
-          onDisconnectWallet={handleDisconnectWallet}
-          onRefreshBalance={loadBalance}
-          onDashboardClick={() => handleNavigate("dashboard")}
-          onAnalyticsClick={() => handleNavigate("analytics")}
-          onHelpClick={() => handleNavigate("help")}
-          onRegisterClick={() => handleNavigate("register")}
-          canRegister={registrationState === "new"}
-        />
-        </Suspense>
-      </>
-    );
-  }
-
   return (
     <>
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 5000,
-          style: { borderRadius: '12px', padding: '14px 18px', fontSize: '14px', fontWeight: 500 },
-        }}
-      />
       {isOffline && (
         <div
           style={{
@@ -372,24 +310,21 @@ const [activeView, setActiveView] = useState('dashboard')
           ⚠️ You are currently offline. Transactions will fail.
         </div>
       )}
-        <Suspense fallback={<ViewFallback label="Loading dashboard..." />}>
-
-      <Dashboard
-        userPublicKey={userPublicKey}
-        onConnectWallet={handleConnectWallet}
-        onDisconnectWallet={handleDisconnectWallet}
-        balance={balance}
-        isRefreshing={isRefreshing}
-        balanceError={balanceError}
-        onRefreshBalance={loadBalance}
-        onRegisterClick={() => handleNavigate("register")}
-        onAnalyticsClick={() => handleNavigate("analytics")}
-        onHistoryClick={() => handleNavigate("history")}
-        onHelpClick={() => handleNavigate("help")}
-        onRegistrationStateChange={handleRegistrationStateChange}
-        canRegister={registrationState === "new"}
-      />
-        </Suspense>
+      <Suspense fallback={<ViewFallback label="Loading dashboard..." />}>
+        <Dashboard
+          userPublicKey={userPublicKey}
+          balance={balance}
+          isRefreshing={isRefreshing}
+          balanceError={balanceError}
+          onRefreshBalance={loadBalance}
+          onConnectWallet={handleConnectWallet}
+          onDisconnectWallet={handleDisconnectWallet}
+          onNavigate={handleNavigate}
+          registrationState={registrationState}
+          onRegistrationStateChange={handleRegistrationStateChange}
+        />
+      </Suspense>
+      <Toaster position="bottom-right" />
     </>
   );
 }
