@@ -641,5 +641,5 @@ See [LICENSE](LICENSE).
 
 ## Handsoff notes
 
-<!-- handsoff-issue-2 -->
-- #2: GET /federation returns 500 instead of 404 when username is unregistered
+<!-- handsoff-issue-33 -->
+- #33: GET /federation does not set Cache-Control headers, causing aggressive CDN caching
