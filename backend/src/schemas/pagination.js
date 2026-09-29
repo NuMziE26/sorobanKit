@@ -61,17 +61,21 @@ function parsePagination(query = {}) {
 /**
  * Build the pagination `meta` block returned alongside `data`.
  *
+ * Always includes every meta field so clients can safely read
+ * `meta.totalPages` even when there are no results (defaults to 0).
+ *
  * @param {{ total: number, page: number, limit: number }} params
  * @returns {{ total: number, page: number, limit: number, totalPages: number }}
  */
 function buildPaginationMeta({ total, page, limit }) {
   const safeLimit = limit > 0 ? limit : DEFAULT_LIMIT;
+  const safeTotal = Number.isFinite(total) && total > 0 ? total : 0;
 
   return {
-    total,
+    total: safeTotal,
     page,
     limit: safeLimit,
-    totalPages: Math.ceil(total / safeLimit) || 0,
+    totalPages: Math.ceil(safeTotal / safeLimit) || 0,
   };
 }
 
