@@ -27,11 +27,11 @@ jobs:
         with:
           workspaces: ./payment_router
 
-      - name: Run contract tests
-        run: cargo test --verbose
-
       - name: Build contract to WASM
         run: cargo build --target wasm32-unknown-unknown --release
+
+      - name: Run contract unit tests
+        run: cargo test --features testutils -- --nocapture
 
   bindings-check:
     name: Bindings up-to-date

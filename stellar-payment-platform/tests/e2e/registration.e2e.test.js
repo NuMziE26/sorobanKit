@@ -92,8 +92,18 @@ jest.mock('bad-words', () => {
 
 const request = require('supertest');
 const { app } = require('../../server');
+const { e2ePrefix, purgeTestRecords } = require('./e2eHelpers');
+
+const TEST_PREFIX = e2ePrefix();
+const TEST_USER = `${TEST_PREFIX}reg`;
 
 describe('E2E: Registration Flow', () => {
+  // Runs even if beforeAll/beforeEach or a test fails, so no records leak
+  // into the next run.
+  afterAll(() => {
+    purgeTestRecords(mockDb, TEST_PREFIX);
+  });
+
   beforeEach(() => {
     mockDb.clear();
   });
@@ -101,7 +111,7 @@ describe('E2E: Registration Flow', () => {
   it('should successfully register a new user and handle duplicate registration gracefully', async () => {
     // 1. Successful Registration
     const validUser = {
-      username: 'e2eregistertest',
+      username: `${TEST_USER}`,
       address: 'GABC123XYZ456789REGISTRATION',
     };
 

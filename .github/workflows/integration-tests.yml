@@ -1,0 +1,42 @@
+name: Integration Tests
+
+on:
+  pull_request:
+    paths:
+      - 'payment_router/src/**'
+
+jobs:
+  integration-tests:
+    name: Soroban Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Start local Stellar network
+        run: docker compose --profile integration up -d
+
+      - name: Wait for Stellar network to be ready
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8000/soroban/rpc -X POST \
+              -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' > /dev/null; then
+              echo "Stellar network is ready"
+              exit 0
+            fi
+            echo "Waiting for Stellar network... ($i/60)"
+            sleep 5
+          done
+          echo "Timed out waiting for Stellar network" >&2
+          exit 1
+
+      - name: Run integration tests
+        run: |
+          chmod +x tests/integration/run.sh
+          tests/integration/run.sh
+
+      - name: Stop local Stellar network
+        if: always()
+        run: docker compose --profile integration down -v

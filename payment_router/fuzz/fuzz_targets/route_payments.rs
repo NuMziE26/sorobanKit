@@ -6,10 +6,16 @@
 //! batch routing entry point. The contract is expected to fail gracefully
 //! (return an `Err`) on invalid input rather than panic or trap — libFuzzer
 //! treats any panic as a crash, so a clean `Result` either way is a pass.
+//!
+//! Amount handling (issue #45): the contract rejects non-positive amounts with
+//! `Error::InvalidAmount` before any arithmetic runs. libFuzzer's `i128`
+//! generator produces negative values freely, so this target asserts that
+//! negative amounts are rejected with `InvalidAmount` instead of being fed
+//! into the subtraction path (which would surface as a false-positive crash).
 
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
-use payment_router::{Payment, PaymentRouter, PaymentRouterClient};
+use payment_router::{Error, Payment, PaymentRouter, PaymentRouterClient};
 use soroban_sdk::{testutils::Address as _, vec, Address, Env};
 
 /// Cap the batch size so a single fuzz iteration stays fast; the underlying
@@ -71,7 +77,14 @@ fuzz_target!(|input: FuzzInput| {
         .collect();
 
     let mut payments = vec![&env];
+    let mut has_negative_amount = false;
     for fuzz_payment in input.payments.iter().take(MAX_PAYMENTS) {
+        // Negative amounts are expected to be rejected by the contract with
+        // `Error::InvalidAmount`; track them so we can assert that below
+        // rather than letting them reach the subtraction path.
+        if fuzz_payment.amount < 0 {
+            has_negative_amount = true;
+        }
         let sender = &senders[fuzz_payment.sender_idx as usize % senders.len()];
         let recipient = &recipients[fuzz_payment.recipient_idx as usize % recipients.len()];
         payments.push_back(Payment {
@@ -83,6 +96,11 @@ fuzz_target!(|input: FuzzInput| {
     }
 
     // Only the absence of a panic/trap matters here — any `Err` is a graceful
-    // rejection, which is the behavior this fuzz target verifies.
-    let _ = client.try_route_payments(&payments);
+    // rejection, which is the behavior this fuzz target verifies. When the
+    // batch contains a negative amount, the contract must reject it with
+    // `InvalidAmount` instead of panicking in the subtraction path.
+    let result = client.try_route_payments(&payments);
+    if has_negative_amount {
+        assert_eq!(result, Err(Ok(Error::InvalidAmount)));
+    }
 });

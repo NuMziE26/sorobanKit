@@ -35,6 +35,7 @@ const {
   startWebhookWorker,
   closeWebhookQueue,
   processWebhookJob,
+  detectSsrfTarget,
   MAX_WEBHOOK_ATTEMPTS,
   WEBHOOK_BACKOFF_DELAY_MS,
   WEBHOOK_QUEUE_NAME,
@@ -190,5 +191,102 @@ describe('webhook BullMQ delivery', () => {
       expect.objectContaining({ connection: expect.any(Object) }),
     );
     expect(mockQueueAdd).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SSRF protection – detectSsrfTarget', () => {
+  test('allows a public HTTPS URL', () => {
+    expect(detectSsrfTarget('https://merchant.example.com/hook')).toBeNull();
+  });
+
+  test('allows an HTTPS URL on an arbitrary public port', () => {
+    expect(detectSsrfTarget('https://payments.acme.io:8443/webhooks')).toBeNull();
+  });
+
+  test('blocks a plain http:// URL', () => {
+    expect(detectSsrfTarget('http://merchant.example.com/hook')).toMatch(/HTTPS/);
+  });
+
+  test('blocks a private RFC 1918 address (192.168.x.x)', () => {
+    expect(detectSsrfTarget('https://192.168.1.1/hook')).toMatch(/private/i);
+  });
+
+  test('blocks a private RFC 1918 address (10.x.x.x)', () => {
+    expect(detectSsrfTarget('https://10.0.0.1/internal')).toMatch(/private/i);
+  });
+
+  test('blocks a private RFC 1918 address (172.16-31.x.x)', () => {
+    expect(detectSsrfTarget('https://172.16.0.1/hook')).toMatch(/private/i);
+    expect(detectSsrfTarget('https://172.31.255.255/hook')).toMatch(/private/i);
+  });
+
+  test('does not block 172.15.x.x (just outside RFC 1918 range)', () => {
+    expect(detectSsrfTarget('https://172.15.0.1/hook')).toBeNull();
+  });
+
+  test('blocks a loopback address (127.0.0.1)', () => {
+    expect(detectSsrfTarget('https://127.0.0.1/hook')).toMatch(/loopback/i);
+  });
+
+  test('blocks a loopback hostname (localhost)', () => {
+    expect(detectSsrfTarget('https://localhost/hook')).toMatch(/loopback/i);
+  });
+
+  test('blocks an IPv6 loopback address (::1)', () => {
+    expect(detectSsrfTarget('https://[::1]/hook')).toMatch(/loopback/i);
+  });
+
+  test('blocks a link-local address (169.254.x.x)', () => {
+    // 169.254.169.254 is the AWS instance metadata endpoint
+    expect(detectSsrfTarget('https://169.254.169.254/latest/meta-data/')).toMatch(/link-local/i);
+  });
+
+  test('blocks a file:// URL', () => {
+    expect(detectSsrfTarget('file:///etc/passwd')).toMatch(/HTTPS/);
+  });
+
+  test('blocks an ftp:// URL', () => {
+    expect(detectSsrfTarget('ftp://merchant.example.com/hook')).toMatch(/HTTPS/);
+  });
+
+  test('blocks an http:// URL targeting a private IP', () => {
+    const err = detectSsrfTarget('http://192.168.1.1/hook');
+    // Blocked at the non-HTTPS scheme check before even reaching the IP check.
+    expect(err).toBeTruthy();
+  });
+
+  test('sendWebhook rejects a private IP URL before making any network request', async () => {
+    const { sendWebhook } = require('../src/webhookWorker');
+    // Track whether fetch is called (if it was set previously by the outer suite).
+    const fetchBefore = global.fetch;
+    global.fetch = jest.fn();
+
+    await expect(sendWebhook('https://192.168.1.1/hook', { event: 'test' }, 'secret')).rejects.toThrow(
+      /SSRF|private/i,
+    );
+    expect(global.fetch).not.toHaveBeenCalled();
+
+    global.fetch = fetchBefore;
+  });
+
+  test('sendWebhook rejects a file:// URL before making any network request', async () => {
+    const { sendWebhook } = require('../src/webhookWorker');
+    const fetchBefore = global.fetch;
+    global.fetch = jest.fn();
+
+    await expect(sendWebhook('file:///etc/passwd', { event: 'test' }, 'secret')).rejects.toThrow(
+      /SSRF|HTTPS/i,
+    );
+    expect(global.fetch).not.toHaveBeenCalled();
+
+    global.fetch = fetchBefore;
+  });
+
+  test('sendWebhook proceeds to fetch for a public HTTPS URL', async () => {
+    const { sendWebhook } = require('../src/webhookWorker');
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    await expect(sendWebhook('https://merchant.example.com/hook', { event: 'test' }, 'secret')).resolves.toEqual({ ok: true });
+    expect(global.fetch).toHaveBeenCalledWith('https://merchant.example.com/hook', expect.anything());
   });
 });

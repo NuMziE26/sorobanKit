@@ -75,15 +75,26 @@ jest.mock('../../src/multisigner-verifier', () => ({
 
 const request = require('supertest');
 const { app } = require('../../server');
+const { e2ePrefix, purgeTestRecords } = require('./e2eHelpers');
+
+const TEST_PREFIX = e2ePrefix();
+const TEST_USER = `${TEST_PREFIX}hook`;
 
 describe('E2E: Webhooks Flow', () => {
+  // Runs even if beforeAll/beforeEach or a test fails, so no records leak
+  // into the next run.
+  afterAll(() => {
+    purgeTestRecords(mockDbUsers, TEST_PREFIX);
+    purgeTestRecords(mockDbWebhooks, TEST_PREFIX);
+  });
+
   beforeEach(() => {
     mockDbUsers.clear();
     mockDbWebhooks.clear();
     
     // Set up a user for the webhooks
     mockDbUsers.set('GABC123XYZ456789WEBHOOK', {
-      username: 'webhook_test_user*localhost',
+      username: `${TEST_USER}*localhost`,
       address: 'GABC123XYZ456789WEBHOOK',
     });
   });
@@ -95,7 +106,7 @@ describe('E2E: Webhooks Flow', () => {
     let res = await request(app)
       .post('/api/v1/webhooks')
       .send({
-        username: 'webhook_test_user',
+        username: TEST_USER,
         signature: 'mock_signature',
         url: 'https://example.com/webhook',
       });
@@ -112,7 +123,7 @@ describe('E2E: Webhooks Flow', () => {
     res = await request(app)
       .get('/api/v1/webhooks')
       .send({
-        username: 'webhook_test_user',
+        username: TEST_USER,
         signature: 'mock_signature',
       });
 
@@ -124,7 +135,7 @@ describe('E2E: Webhooks Flow', () => {
     res = await request(app)
       .delete(`/api/v1/webhooks/${webhookId}`)
       .send({
-        username: 'webhook_test_user',
+        username: TEST_USER,
         signature: 'mock_signature',
       });
 
@@ -135,7 +146,7 @@ describe('E2E: Webhooks Flow', () => {
     res = await request(app)
       .get('/api/v1/webhooks')
       .send({
-        username: 'webhook_test_user',
+        username: TEST_USER,
         signature: 'mock_signature',
       });
 

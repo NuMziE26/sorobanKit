@@ -90,4 +90,46 @@ describe('GET /federation', () => {
     expect(response.status).toBe(404);
     expect(response.body.error.message).toBe('Address not found');
   });
+
+  // ── Wildcard / malformed address validation ───────────────────────────────
+
+  test('returns 400 INVALID_INPUT for q=alice* (missing domain)', async () => {
+    const response = await request(app).get('/federation?q=alice*');
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('INVALID_INPUT');
+    expect(response.body.error.details[0].message).toMatch(
+      /Invalid federation address format/,
+    );
+    // No database call should be made for an invalid address.
+    expect(prisma.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 INVALID_INPUT for q=*domain (missing username)', async () => {
+    const response = await request(app).get('/federation?q=*domain');
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('INVALID_INPUT');
+    expect(response.body.error.details[0].message).toMatch(
+      /Invalid federation address format/,
+    );
+    expect(prisma.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  test('resolves normally for a well-formed q=alice*domain', async () => {
+    prisma.user.findFirst.mockResolvedValue({
+      username: 'alice*domain',
+      address: 'GDQ4X7B2QWYRDB6S2Y5R6G6U4E6U6C7G6U6C7G6U6C7G6U6C7G6U6C7G',
+      memoType: null,
+      memo: null,
+    });
+
+    const response = await request(app).get('/federation?q=alice*domain');
+
+    expect(response.status).toBe(200);
+    expect(response.body.account_id).toBe(
+      'GDQ4X7B2QWYRDB6S2Y5R6G6U4E6U6C7G6U6C7G6U6C7G6U6C7G6U6C7G',
+    );
+    expect(prisma.user.findFirst).toHaveBeenCalled();
+  });
 });

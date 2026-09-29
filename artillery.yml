@@ -8,6 +8,11 @@ config:
   defaults:
     headers:
       accept: "application/json"
+  variables:
+    apiKey: "{{ $processEnvironment.TEST_API_KEY }}"
+before:
+  flow:
+    - log: "Running load tests with TEST_API_KEY from environment"
 scenarios:
   - name: "Address lookup load"
     weight: 3
@@ -24,3 +29,17 @@ scenarios:
           qs:
             q: "alice*localhost"
             type: "name"
+  - name: "Admin routing stats load"
+    weight: 1
+    flow:
+      - get:
+          url: "/admin/stats/routing"
+          headers:
+            X-Api-Key: "{{ apiKey }}"
+  - name: "Admin audit logs load"
+    weight: 1
+    flow:
+      - get:
+          url: "/admin/audit-logs"
+          headers:
+            X-Api-Key: "{{ apiKey }}"

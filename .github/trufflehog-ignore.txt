@@ -1,4 +1,25 @@
+# TruffleHog path exclusion list
+# Lines starting with '#' are comments. Each other line is a regex matched
+# against the file path. Matches are excluded from secret scanning.
+
+# Test files — may contain deliberately invalidated fake credentials used
+# to exercise error-handling and negative-path logic. These are NOT real
+# secrets: they are either randomly generated strings with no valid scope,
+# or strings explicitly documented here as test fixtures.
+#
+# Test secret exception (invalidated / never-valid):
+#   STELLAR_TEST_FAKE_API_KEY=sk_test_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+#   This key format is intentionally structured to trip pattern-based scanners
+#   so CI can verify the --fail path. It has never been issued and is invalid.
 .*test.*
 .*spec.*
 tests/.*
 __tests__/.*
+
+# Seed and fixture data scripts
+scripts/seed\.js
+stellar-payment-platform/scripts/seed\.js
+
+# Documentation examples (webhook-signature-verification.md contains
+# placeholder HMAC keys used in code samples)
+docs/.*\.md

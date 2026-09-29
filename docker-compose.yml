@@ -8,6 +8,11 @@
 #
 # dev and test use separate databases on separate host ports, so both can run
 # at once without colliding.
+#
+# Database ports are published to 127.0.0.1 only. Binding to localhost keeps
+# the dev and test Postgres instances reachable from the host (for psql, the
+# test suite, etc.) without exposing them to the local network — important on
+# shared CI machines and developer laptops that may be on untrusted networks.
 
 services:
   # ── dev ────────────────────────────────────────────────────────────────────
@@ -19,7 +24,8 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: stellar_tags
     ports:
-      - "5432:5432"
+      # 127.0.0.1 only: reachable from the host, not from the network.
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -85,9 +91,10 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: stellar_tags_test
-    # 5433 on the host so a dev postgres can stay up on 5432.
+    # 5433 on the host so a dev postgres can stay up on 5432. Bound to
+    # 127.0.0.1 so the test database is not reachable from the network.
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     # No volume: a test database should start empty every time.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
