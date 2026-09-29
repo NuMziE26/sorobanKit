@@ -639,3 +639,7 @@ Upon successful deployment, the tool automatically updates the contract address 
 
 See [LICENSE](LICENSE).
 
+## Handsoff notes
+
+<!-- handsoff-issue-94 -->
+- #94: schemas/index.js memo validation does not enforce memo_hash as 64-character hex
