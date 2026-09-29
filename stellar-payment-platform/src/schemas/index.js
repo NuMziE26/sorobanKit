@@ -32,12 +32,18 @@ const sanitized = (schema) => schema.transform(sanitizeString);
 
 // Query values arrive as strings. Page and limit clamp rather than reject, so
 // `?limit=1000` keeps returning the maximum page size instead of erroring.
+// When a value is absent (undefined) the .default() kicks in after the
+// preprocess step, so missing params resolve to the documented defaults
+// (page=1, limit=10) without any extra branching in the handlers.
 const clampedInt = (fallback, min, max) =>
-  z.preprocess((value) => {
-    const parsed = parseInt(value, 10);
-    if (Number.isNaN(parsed)) return fallback;
-    return Math.min(max, Math.max(min, parsed));
-  }, z.number().int());
+  z
+    .preprocess((value) => {
+      if (value === undefined || value === null || value === '') return undefined;
+      const parsed = parseInt(value, 10);
+      if (Number.isNaN(parsed)) return undefined;
+      return Math.min(max, Math.max(min, parsed));
+    }, z.number().int().min(min).max(max).optional())
+    .default(fallback);
 
 const paginationFields = {
   page: clampedInt(1, 1, Number.MAX_SAFE_INTEGER),
@@ -138,7 +144,7 @@ const usersQuerySchema = z
  * StrKey in the handler, which knows the real Stellar key format. */
 const accountPaymentsQuerySchema = z
   .object({
-    limit: clampedInt(25, 1, 100),
+    limit: clampedInt(25, 1, 100), // default 25, min 1, max 100
     cursor: z.string().trim().min(1).optional(),
     order: z.enum(['asc', 'desc']).catch('desc'),
   })
