@@ -234,4 +234,64 @@ describe('authenticateUsernameOwner', () => {
       ['alice*localhost'],
     );
   });
+
+  // ── Multi-sig array path (2-of-3 and similar threshold scenarios) ─────
+
+  it('accepts an array of two signer addresses for a 2-of-3 multi-sig account', async () => {
+    verifyMultiSignerThreshold.mockResolvedValue({ success: true });
+
+    // Two valid co-signer addresses supplied together.
+    const SIGNER_1 = 'GBPUQZH3WZUXHEMUGZN5ZYU4D4GHCFEMOGUINU6MF345GBD2QXNYYIEQ';
+    const SIGNER_2 = 'GCPUQZH3WZUXHEMUGZN5ZYU4D4GHCFEMOGUINU6MF345GBD2QXNYYIEQ';
+
+    const result = await authenticateUsernameOwner({
+      username: 'alice',
+      signature: [SIGNER_1, SIGNER_2],
+    });
+
+    expect(result.username).toBe('alice');
+    expect(verifyMultiSignerThreshold).toHaveBeenCalledWith(
+      VALID_ADDRESS,
+      [SIGNER_1, SIGNER_2],
+      { operationType: 'management' },
+    );
+  });
+
+  it('rejects when multi-sig array verification fails threshold check', async () => {
+    verifyMultiSignerThreshold.mockResolvedValue({
+      success: false,
+      errorMessage: 'Insufficient signing weight. Required: 2, Provided: 1',
+    });
+
+    const SIGNER_1 = 'GBPUQZH3WZUXHEMUGZN5ZYU4D4GHCFEMOGUINU6MF345GBD2QXNYYIEQ';
+
+    await expect(
+      authenticateUsernameOwner({
+        username: 'alice',
+        signature: [SIGNER_1],
+      }),
+    ).rejects.toMatchObject({
+      message: 'Insufficient signing weight. Required: 2, Provided: 1',
+      statusCode: 401,
+    });
+  });
+
+  it('rejects an empty signer array', async () => {
+    await expect(
+      authenticateUsernameOwner({ username: 'alice', signature: [] }),
+    ).rejects.toMatchObject({ message: 'Missing required field: signature.', statusCode: 400 });
+  });
+
+  it('routes single-signer accounts through the Freighter path, not multi-sig', async () => {
+    // A base64 signature (not an address) should never call verifyMultiSignerThreshold.
+    const result = await authenticateUsernameOwner({
+      username: 'alice',
+      signature: BASE64_SIGNATURE,
+      publicKey: VALID_ADDRESS,
+    });
+
+    expect(result.username).toBe('alice');
+    expect(verifyMultiSignerThreshold).not.toHaveBeenCalled();
+    expect(sdk.__mockVerify).toHaveBeenCalledTimes(1);
+  });
 });

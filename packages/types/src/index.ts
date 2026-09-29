@@ -118,6 +118,14 @@ export interface Client {
   version: (options?: MethodOptions) => Promise<AssembledTransaction<u32>>
 
   /**
+   * Construct and simulate a get_version transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Returns the semantic version string of this contract matching the version
+   * declared in Cargo.toml (e.g. "0.1.0"). Use this after an upgrade to
+   * confirm the expected API version before any state-mutating operations.
+   */
+  get_version: (options?: MethodOptions) => Promise<AssembledTransaction<string>>
+
+  /**
    * Construct and simulate a is_paused transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Returns whether the contract is currently paused.
    */
@@ -261,6 +269,7 @@ export class Client extends ContractClient {
       new ContractSpec([ "AAAAAAAAADxSZXR1cm5zIHRoZSBjdXJyZW50IHByb3RvY29sIGZlZSBwZXJjZW50YWdlIGluIGJhc2lzIHBvaW50cy4AAAAHZ2V0X2ZlZQAAAAAAAAAAAQAAAAs=",
         "AAAAAAAAAE1SZXBsYWNlcyB0aGlzIGNvbnRyYWN0J3MgV0FTTSB3aXRoIGEgcHJldmlvdXNseSB1cGxvYWRlZCB2ZXJzaW9uLiBBZG1pbi1vbmx5LgAAAAAAAAd1cGdyYWRlAAAAAAEAAAAAAAAADW5ld193YXNtX2hhc2gAAAAAAAPuAAAAIAAAAAEAAAPpAAAD7QAAAAAAAAAD",
         "AAAAAAAAAB1SZXR1cm5zIHRoZSBjb250cmFjdCB2ZXJzaW9uLgAAAAAAAAd2ZXJzaW9uAAAAAAAAAAABAAAABA==",
+        "AAAAAAAAADxSZXR1cm5zIHRoZSBzZW1hbnRpYyBjb250cmFjdCB2ZXJzaW9uIHN0cmluZyAoZS5nLiAiMC4xLjAiKS4AAAALZ2V0X3ZlcnNpb24AAAAAAAAAAAEAAAAO",
         "AAAABAAAAIpDb250cmFjdC1sZXZlbCBlcnJvcnMgcmV0dXJuZWQgaW5zdGVhZCBvZiBwYW5pY2tpbmcsIHNvIGNhbGxlcnMgZ2V0IGEKc3BlY2lmaWMsIHN0YWJsZSBlcnJvciBjb2RlIHRvIGJyYW5jaCBvbiByYXRoZXIgdGhhbiBhbiBvcGFxdWUgdHJhcC4AAAAAAAAAAAAFRXJyb3IAAAAAAAAJAAAARUNhbGxlciBpcyBub3QgYXV0aG9yaXplZCB0byBwZXJmb3JtIHRoaXMgYWN0aW9uIChlLmcuIG5vdCB0aGUgYWRtaW4pLgAAAAAAAAxVbmF1dGhvcml6ZWQAAAABAAAAQlNlbmRlcidzIHRva2VuIGJhbGFuY2UgaXMgbG93ZXIgdGhhbiB0aGUgcmVxdWVzdGVkIHBheW1lbnQgYW1vdW50LgAAAAAAE0luc3VmZmljaWVudEJhbGFuY2UAAAAAAgAAAE1SZXF1ZXN0ZWQgYW1vdW50IGlzIG91dHNpZGUgYWxsb3dlZCBib3VuZHMsIG9yIGEgc3BlbmRpbmcgbGltaXQgd2FzIGV4Y2VlZGVkLgAAAAAAAA1MaW1pdEV4Y2VlZGVkAAAAAAAAAwAAAERgaW5pdGlhbGl6ZWAgd2FzIGNhbGxlZCBvbiBhIGNvbnRyYWN0IHRoYXQgYWxyZWFkeSBoYXMgYW4gYWRtaW4gc2V0LgAAABJBbHJlYWR5SW5pdGlhbGl6ZWQAAAAAAAQAAABOQW4gYWRtaW4tY29uZmlndXJlZCB2YWx1ZSAodHJlYXN1cnksIGZlZSwgYWRtaW4pIHdhcyByZWFkIGJlZm9yZSBgaW5pdGlhbGl6ZWAuAAAAAAAOTm90SW5pdGlhbGl6ZWQAAAAAAAUAAAAAAAAABlBhdXNlZAAAAAAABgAAAAAAAAAOSW52YWxpZEZlZVJhdGUAAAAAAAcAAABHU2VuZGVyIGFuZCByZWNpcGllbnQgYWRkcmVzc2VzIGFyZSB0aGUgc2FtZSAoc2VsZi1yb3V0aW5nIG5vdCBhbGxvd2VkKS4AAAAAEEludmFsaWRSZWNpcGllbnQAAAAIAAAAIVJlY2lwaWVudCBhZGRyZXNzIGlzIGJsYWNrbGlzdGVkLgAAAAAAAAtCbGFja2xpc3RlZAAAAAAJ",
         "AAAAAAAAADFSZXR1cm5zIHdoZXRoZXIgdGhlIGNvbnRyYWN0IGlzIGN1cnJlbnRseSBwYXVzZWQuAAAAAAAACWlzX3BhdXNlZAAAAAAAAAAAAAABAAAAAQ==",
         "AAAAAAAAADpTZXQgYSBuZXcgYWRtaW4uIEdhdGVkIGJ5IHRoZSBjdXJyZW50IGFkbWluIGlmIG9uZSBleGlzdHMuAAAAAAAJc2V0X2FkbWluAAAAAAAAAQAAAAAAAAAJbmV3X2FkbWluAAAAAAAAEwAAAAEAAAPpAAAD7QAAAAAAAAAD",
@@ -292,6 +301,7 @@ export class Client extends ContractClient {
     get_fee: this.txFromJSON<i128>,
         upgrade: this.txFromJSON<Result<void>>,
         version: this.txFromJSON<u32>,
+        get_version: this.txFromJSON<string>,
         is_paused: this.txFromJSON<boolean>,
         set_admin: this.txFromJSON<Result<void>>,
         set_pause: this.txFromJSON<Result<void>>,

@@ -1,11 +1,31 @@
+'use strict';
+
 const pino = require('pino');
 const pinoHttp = require('pino-http');
+
+// Read service metadata once at module load so every log record carries it.
+let _pkg = {};
+try {
+  _pkg = require('../package.json');
+} catch {
+  // If package.json can't be read (unusual in tests), fall back gracefully.
+}
+
+const SERVICE_NAME = _pkg.name || 'stellar-payment-platform';
+const SERVICE_VERSION = _pkg.version || 'unknown';
 
 const LOG_LEVEL = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
 const IS_TEST = process.env.NODE_ENV === 'test';
 
 const logger = pino({
   level: IS_TEST ? 'silent' : LOG_LEVEL,
+  // Attach service name and version to every log record so records from
+  // multiple services can be filtered in aggregated logging platforms
+  // (Grafana Loki, Datadog, etc.) without ambiguity.
+  base: {
+    service: SERVICE_NAME,
+    version: SERVICE_VERSION,
+  },
   formatters: {
     level: (label) => {
       return { level: label };
