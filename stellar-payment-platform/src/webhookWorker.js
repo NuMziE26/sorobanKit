@@ -114,7 +114,88 @@ const getWebhooksExhaustedRetries = async (prisma, poolAllFn) => {
   }
 };
 
+/**
+ * Returns an error message string if `rawUrl` should be blocked as an SSRF
+ * risk, or `null` if the URL is safe to request.
+ *
+ * Blocks:
+ *  - Non-HTTPS schemes (http://, file://, ftp://, etc.)
+ *  - Loopback addresses (127.0.0.0/8, ::1, [::1])
+ *  - RFC 1918 private ranges (10/8, 172.16/12, 192.168/16)
+ *  - Link-local (169.254/16, fe80::/10)
+ *  - Hostname aliases for localhost
+ *
+ * @param {string} rawUrl
+ * @returns {string|null}
+ */
+const detectSsrfTarget = (rawUrl) => {
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return `Webhook URL is not a valid URL: ${rawUrl}`;
+  }
+
+  // Only HTTPS is permitted; reject http://, file://, ftp://, etc.
+  if (parsed.protocol !== 'https:') {
+    return `Webhook URL must use HTTPS (got ${parsed.protocol}): ${rawUrl}`;
+  }
+
+  const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, ''); // strip IPv6 brackets
+
+  // Block localhost aliases.
+  if (hostname === 'localhost' || hostname === 'localhost.localdomain') {
+    return `Webhook URL targets a loopback host (SSRF blocked): ${rawUrl}`;
+  }
+
+  // Parse dotted-decimal IPv4 and check against blocked ranges.
+  const ipv4Parts = hostname.split('.');
+  if (ipv4Parts.length === 4 && ipv4Parts.every((p) => /^\d+$/.test(p))) {
+    const [a, b] = ipv4Parts.map(Number);
+
+    // 127.0.0.0/8 — loopback
+    if (a === 127) {
+      return `Webhook URL targets a loopback address (SSRF blocked): ${rawUrl}`;
+    }
+    // 10.0.0.0/8 — RFC 1918 private
+    if (a === 10) {
+      return `Webhook URL targets a private address (SSRF blocked): ${rawUrl}`;
+    }
+    // 172.16.0.0/12 — RFC 1918 private
+    if (a === 172 && b >= 16 && b <= 31) {
+      return `Webhook URL targets a private address (SSRF blocked): ${rawUrl}`;
+    }
+    // 192.168.0.0/16 — RFC 1918 private
+    if (a === 192 && b === 168) {
+      return `Webhook URL targets a private address (SSRF blocked): ${rawUrl}`;
+    }
+    // 169.254.0.0/16 — link-local (AWS metadata service, etc.)
+    if (a === 169 && b === 254) {
+      return `Webhook URL targets a link-local address (SSRF blocked): ${rawUrl}`;
+    }
+  }
+
+  // IPv6 loopback (::1) and link-local (fe80::/10).
+  if (hostname === '::1' || hostname === '0:0:0:0:0:0:0:1') {
+    return `Webhook URL targets a loopback address (SSRF blocked): ${rawUrl}`;
+  }
+  if (/^fe[89ab][0-9a-f]:/i.test(hostname) || hostname.startsWith('fe80:')) {
+    return `Webhook URL targets a link-local address (SSRF blocked): ${rawUrl}`;
+  }
+
+  return null;
+};
+
 const sendWebhook = async (url, payload, secret) => {
+  // ── SSRF guard ─────────────────────────────────────────────────────────────
+  // Reject non-HTTPS schemes and private/loopback IP targets before opening
+  // any connection, so the worker cannot be used as an SSRF proxy.
+  const ssrfError = detectSsrfTarget(url);
+  if (ssrfError) {
+    throw Object.assign(new Error(ssrfError), { code: 'SSRF_BLOCKED' });
+  }
+  // ── end SSRF guard ─────────────────────────────────────────────────────────
+
   const rawBody = JSON.stringify(payload);
   const signature = computeSignature(secret, rawBody);
 
@@ -539,6 +620,7 @@ module.exports = {
   processWebhookJob,
   sendWebhook,
   computeSignature,
+  detectSsrfTarget,
   WEBHOOK_TIMEOUT_MS,
   WEBHOOK_QUEUE_NAME,
   MAX_WEBHOOK_ATTEMPTS,
