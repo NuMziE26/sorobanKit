@@ -645,5 +645,5 @@ See [LICENSE](LICENSE).
 
 ## Handsoff notes
 
-<!-- handsoff-issue-105 -->
-- #105: src/routes/v1/ route files lack JSDoc comments for endpoint documentation
+<!-- handsoff-issue-110 -->
+- #110: webhookWorker.js does not emit notification when webhook is moved to DLQ
