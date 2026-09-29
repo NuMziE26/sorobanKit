@@ -639,3 +639,7 @@ Upon successful deployment, the tool automatically updates the contract address 
 
 See [LICENSE](LICENSE).
 
+## Handsoff notes
+
+<!-- handsoff-issue-110 -->
+- #110: webhookWorker.js does not emit notification when webhook is moved to DLQ
