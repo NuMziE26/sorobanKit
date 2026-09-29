@@ -1456,6 +1456,22 @@ impl PaymentRouter {
     pub fn version(_env: Env) -> u32 {
         Self::VERSION
     }
+
+    /// Returns the semantic version string of this contract, matching the
+    /// version declared in `Cargo.toml`.
+    ///
+    /// Off-chain services and other contracts can call this function after an
+    /// upgrade to confirm they are talking to the expected API version before
+    /// proceeding with any state-mutating operations.
+    ///
+    /// # Returns
+    /// A `String` in `MAJOR.MINOR.PATCH` format, e.g. `"0.1.0"`.
+    ///
+    /// # Panics
+    /// Does not panic.
+    pub fn get_version(env: Env) -> soroban_sdk::String {
+        soroban_sdk::String::from_str(&env, env!("CARGO_PKG_VERSION"))
+    }
 }
 
 #[cfg(test)]
@@ -2582,6 +2598,50 @@ mod test {
         // Governance address can now update the fee
         client.set_fee_bps(&200);
         assert_eq!(client.get_fee(), 200);
+    }
+
+    // ── get_version tests ────────────────────────────────────────────────────
+
+    /// get_version() must return the semantic version string defined in
+    /// Cargo.toml.  The format must be MAJOR.MINOR.PATCH and match what
+    /// `CARGO_PKG_VERSION` expands to at compile time.
+    #[test]
+    fn test_get_version_returns_semver_string() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, PaymentRouter);
+        let client = PaymentRouterClient::new(&env, &contract_id);
+
+        let version = client.get_version();
+
+        // The version must equal the Cargo.toml package version.
+        let expected = soroban_sdk::String::from_str(&env, env!("CARGO_PKG_VERSION"));
+        assert_eq!(version, expected);
+    }
+
+    /// The version string must be in MAJOR.MINOR.PATCH format (three
+    /// dot-separated numeric components).
+    #[test]
+    fn test_get_version_format_is_semver() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, PaymentRouter);
+        let client = PaymentRouterClient::new(&env, &contract_id);
+
+        let version = client.get_version();
+
+        // Convert to a Rust String for easy assertion.
+        let mut bytes = std::vec![0u8; version.len() as usize];
+        version.copy_into_slice(&mut bytes);
+        let version_str = std::str::from_utf8(&bytes).expect("version should be valid UTF-8");
+
+        // Must have exactly two dots (MAJOR.MINOR.PATCH).
+        let parts: Vec<&str> = version_str.split('.').collect();
+        assert_eq!(parts.len(), 3, "version must have three components, got: {version_str}");
+
+        // Each part must be a non-negative integer.
+        for part in &parts {
+            part.parse::<u64>()
+                .unwrap_or_else(|_| panic!("version component '{part}' is not an integer"));
+        }
     }
 }
 

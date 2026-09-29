@@ -63,4 +63,5 @@ const securityMiddleware = [helmetMiddleware, permissionsPolicy];
 module.exports = {
   securityMiddleware,
   cspDirectives,
+  permissionsPolicy,
 };
