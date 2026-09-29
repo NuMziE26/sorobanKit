@@ -639,3 +639,7 @@ Upon successful deployment, the tool automatically updates the contract address 
 
 See [LICENSE](LICENSE).
 
+## Handsoff notes
+
+<!-- handsoff-issue-100 -->
+- #100: src/utils/tracing.js OpenTelemetry stub is dead code, never wired to instrumentation
