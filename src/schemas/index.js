@@ -31,18 +31,20 @@ export const RESERVED_USERNAMES = [
 
 const reservedUsernameSet = new Set(RESERVED_USERNAMES.map((name) => name.toLowerCase()));
 
-export const registerBodySchema = z.object({
-  username: z
-    .string()
-    .min(3)
-    .max(32)
-    .regex(/^[a-zA-Z0-9_-]+$/, 'Username may only contain letters, numbers, underscores, and hyphens.')
-    .refine((value) => !reservedUsernameSet.has(value.toLowerCase()), {
-      message: 'This username is reserved.',
-    }),
-  email: z.string().email(),
-  password: z.string().min(8),
-});
+export const registerBodySchema = z
+  .object({
+    username: z
+      .string()
+      .min(3)
+      .max(32)
+      .regex(/^[a-zA-Z0-9_-]+$/, 'Username may only contain letters, numbers, underscores, and hyphens.')
+      .refine((value) => !reservedUsernameSet.has(value.toLowerCase()), {
+        message: 'This username is reserved.',
+      }),
+    email: z.string().email(),
+    password: z.string().min(8),
+  })
+  .strip();
 
 export function validateRegisterBody(body) {
   const result = registerBodySchema.safeParse(body);
