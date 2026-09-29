@@ -235,6 +235,33 @@ const parseArgs = (argv = process.argv.slice(2)) => {
   return options;
 };
 
+// ── Dry Run Helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Logs a step that would be executed on-chain, without performing it.
+ *
+ * @param {string} description
+ */
+const logDryRun = (description) => {
+  console.log(`[DRY RUN] Would execute: ${description}`);
+};
+
+/**
+ * Runs a shell command, or logs it when in dry-run mode.
+ *
+ * @param {string} command
+ * @param {object} [execOptions]
+ * @param {boolean} [dryRun]
+ * @returns {string|null} Command output, or null when skipped.
+ */
+const runOrDryRun = (command, execOptions = {}, dryRun = false) => {
+  if (dryRun) {
+    logDryRun(command);
+    return null;
+  }
+  return execSync(command, execOptions);
+};
+
 // ── Environment File Updater ─────────────────────────────────────────────────
 
 /**
@@ -285,6 +312,14 @@ const setEnvVariable = (filePath, key, value) => {
 const updateAllConfigs = (contractId, envFiles = [], options = {}) => {
   const updated = [];
 
+  if (options.dryRun) {
+    logDryRun(`update config files with contract ID ${contractId}`);
+    for (const envFile of envFiles) {
+      logDryRun(`set PAYMENT_ROUTER_CONTRACT_ID/CONTRACT_ID/VITE_CONTRACT_ID in ${envFile}`);
+    }
+    return updated;
+  }
+
   for (const envFile of envFiles) {
     if (setEnvVariable(envFile, 'PAYMENT_ROUTER_CONTRACT_ID', contractId)) {
       setEnvVariable(envFile, 'CONTRACT_ID', contractId);
@@ -334,12 +369,6 @@ const compileAndOptimizeWasm = (options = {}) => {
 
   console.log('🔨 Compiling Soroban smart contract...');
 
-  if (options.dryRun) {
-    console.log('   [Dry Run] cargo build --target wasm32-unknown-unknown --release in payment_router');
-    console.log('   [Dry Run] stellar contract optimize --wasm ...');
-    return DEFAULT_OPTIMIZED_WASM_PATH;
-  }
-
   try {
     execSync('cargo build --target wasm32-unknown-unknown --release', {
       cwd: CONTRACT_DIR,
@@ -349,6 +378,302 @@ const compileAndOptimizeWasm = (options = {}) => {
     console.warn('⚠️  Cargo compilation failed or cargo not available.');
   }
 
-  let
+  let wasmPath = DEFAULT_WASM_PATH;
+  if (!fs.existsSync(wasmPath)) {
+    console.warn(`⚠️  Compiled WASM not found at ${wasmPath}`);
+    return wasmPath;
+  }
 
-/* … truncated 7932 chars — edit only what you need near the top … */
+  console.log('⚙️  Optimizing WASM bytecode...');
+  try {
+    execSync(
+      `stellar contract optimize --wasm ${wasmPath} --wasm-out ${DEFAULT_OPTIMIZED_WASM_PATH}`,
+      { cwd: CONTRACT_DIR, stdio: 'inherit' }
+    );
+    wasmPath = DEFAULT_OPTIMIZED_WASM_PATH;
+  } catch {
+    console.warn('⚠️  Optimization failed; using unoptimized WASM.');
+  }
+
+  return wasmPath;
+};
+
+// ── RPC / On-chain Operations ────────────────────────────────────────────────
+
+/**
+ * Deploys the contract to the configured network.
+ *
+ * @param {object} options
+ * @param {string} wasmPath
+ * @returns {string|null} Deployed contract ID, or null in dry-run.
+ */
+const deployContract = (options, wasmPath) => {
+  const network = NETWORKS[options.network] || NETWORKS.testnet;
+
+  if (options.dryRun) {
+    logDryRun(
+      `stellar contract deploy --wasm ${wasmPath} --network ${network.name} --rpc-url ${network.rpcUrl}`
+    );
+    return null;
+  }
+
+  const output = execSync(
+    `stellar contract deploy --wasm ${wasmPath} --network ${network.name} --rpc-url ${network.rpcUrl}`,
+    { cwd: CONTRACT_DIR, encoding: 'utf8' }
+  );
+  return output.trim();
+};
+
+/**
+ * Initializes the deployed contract with admin/treasury/fee configuration.
+ *
+ * @param {object} options
+ * @param {string} contractId
+ */
+const initializeContract = (options, contractId) => {
+  const network = NETWORKS[options.network] || NETWORKS.testnet;
+
+  if (options.dryRun) {
+    logDryRun(
+      `stellar contract invoke --id ${contractId} --network ${network.name} -- initialize --admin ${options.admin} --treasury ${options.treasury} --fee_bps ${options.feeBps} --fee_cap ${options.feeCap} --max_amount ${options.maxAmount}`
+    );
+    return;
+  }
+
+  execSync(
+    `stellar contract invoke --id ${contractId} --network ${network.name} -- initialize --admin ${options.admin} --treasury ${options.treasury} --fee_bps ${options.feeBps} --fee_cap ${options.feeCap} --max_amount ${options.maxAmount}`,
+    { cwd: CONTRACT_DIR, stdio: 'inherit' }
+  );
+};
+
+/**
+ * Upgrades an existing contract to a new WASM hash.
+ *
+ * @param {object} options
+ * @param {string} contractId
+ * @param {string} wasmPath
+ */
+const upgradeContract = (options, contractId, wasmPath) => {
+  const network = NETWORKS[options.network] || NETWORKS.testnet;
+
+  if (options.dryRun) {
+    logDryRun(
+      `stellar contract install --wasm ${wasmPath} --network ${network.name} --rpc-url ${network.rpcUrl}`
+    );
+    logDryRun(
+      `stellar contract invoke --id ${contractId} --network ${network.name} -- upgrade --new_wasm_hash <hash>`
+    );
+    return;
+  }
+
+  const installOutput = execSync(
+    `stellar contract install --wasm ${wasmPath} --network ${network.name} --rpc-url ${network.rpcUrl}`,
+    { cwd: CONTRACT_DIR, encoding: 'utf8' }
+  );
+  const wasmHash = installOutput.trim();
+
+  execSync(
+    `stellar contract invoke --id ${contractId} --network ${network.name} -- upgrade --new_wasm_hash ${wasmHash}`,
+    { cwd: CONTRACT_DIR, stdio: 'inherit' }
+  );
+};
+
+/**
+ * Fetches the current status of a deployed contract.
+ *
+ * @param {object} options
+ * @param {string} contractId
+ */
+const getContractStatus = (options, contractId) => {
+  const network = NETWORKS[options.network] || NETWORKS.testnet;
+
+  if (options.dryRun) {
+    logDryRun(
+      `stellar contract invoke --id ${contractId} --network ${network.name} -- get_config`
+    );
+    return;
+  }
+
+  execSync(
+    `stellar contract invoke --id ${contractId} --network ${network.name} -- get_config`,
+    { cwd: CONTRACT_DIR, stdio: 'inherit' }
+  );
+};
+
+// ── Input Validation ─────────────────────────────────────────────────────────
+
+/**
+ * Validates parsed options before any on-chain work.
+ *
+ * @param {object} options
+ * @returns {boolean} True when valid.
+ */
+const validateOptions = (options) => {
+  if (!NETWORKS[options.network]) {
+    console.error(`❌ Unknown network: ${options.network}`);
+    console.error(`   Supported networks: ${Object.keys(NETWORKS).join(', ')}`);
+    return false;
+  }
+
+  if (options.command === 'deploy' || options.command === 'init') {
+    if (!options.admin) {
+      console.error('❌ Missing --admin address.');
+      return false;
+    }
+    if (!options.treasury) {
+      console.error('❌ Missing --treasury address.');
+      return false;
+    }
+  }
+
+  if (options.command === 'upgrade' || options.command === 'status') {
+    if (!options.contractId) {
+      console.error('❌ Missing --contract-id.');
+      return false;
+    }
+  }
+
+  return true;
+};
+
+// ── Help ─────────────────────────────────────────────────────────────────────
+
+const printHelp = () => {
+  console.log(`
+PaymentRouter Deployment CLI
+
+Usage:
+  node scripts/deploy.js [command] [options]
+
+Commands:
+  build                 Compile and optimize the contract WASM
+  deploy                Compile, deploy, and initialize the contract
+  upgrade               Upgrade an existing contract
+  init                  Initialize an existing contract
+  status                Show current contract configuration
+
+Options:
+  -n, --network <name>  Network: testnet | mainnet | futurenet | local (default: testnet)
+  -s, --source <key>    Stellar secret key for signing
+      --admin <addr>    Admin address
+      --treasury <addr> Platform treasury address
+      --fee-bps <n>     Fee in basis points (default: 100)
+      --fee-cap <n>     Fee cap (default: 10000000)
+      --max-amount <n>  Max transfer amount
+  -c, --contract-id <id> Contract ID (for upgrade/init/status)
+      --wasm <path>     Use a pre-built WASM file
+      --dry-run         Simulate the workflow without RPC calls or on-chain transactions
+      --skip-build      Skip WASM compilation
+      --env-file <path> Additional .env file to update
+  -h, --help            Show this help
+  -v, --version         Show version
+`);
+};
+
+// ── Main ─────────────────────────────────────────────────────────────────────
+
+const main = () => {
+  const options = parseArgs();
+
+  if (options.command === 'help') {
+    printHelp();
+    return;
+  }
+
+  if (options.command === 'version') {
+    const pkg = require(path.join(ROOT_DIR, 'package.json'));
+    console.log(pkg.version || '0.0.0');
+    return;
+  }
+
+  if (!validateOptions(options)) {
+    process.exitCode = 1;
+    return;
+  }
+
+  const network = NETWORKS[options.network];
+  console.log(`\n🌐 Network: ${network.name} (${network.rpcUrl})`);
+  if (options.dryRun) {
+    console.log('🧪 DRY RUN enabled — no RPC calls or on-chain transactions will be made.');
+  }
+
+  let wasmPath = options.wasmPath;
+
+  if (options.command === 'build' || options.command === 'deploy' || options.command === 'upgrade') {
+    if (!options.skipBuild) {
+      wasmPath = compileAndOptimizeWasm(options);
+    } else if (!wasmPath) {
+      wasmPath = DEFAULT_OPTIMIZED_WASM_PATH;
+    }
+  }
+
+  if (options.command === 'build') {
+    console.log(`✅ Build complete: ${wasmPath}`);
+    return;
+  }
+
+  if (options.command === 'deploy') {
+    const contractId = deployContract(options, wasmPath);
+    if (options.dryRun) {
+      logDryRun('initialize contract after deploy');
+      updateAllConfigs('<contract-id>', options.envFiles, { dryRun: true });
+      console.log('\n✅ Dry run complete. No transactions were submitted.');
+      return;
+    }
+    if (!contractId) {
+      console.error('❌ Deployment did not return a contract ID.');
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`✅ Deployed contract: ${contractId}`);
+    initializeContract(options, contractId);
+    const updated = updateAllConfigs(contractId, options.envFiles);
+    console.log(`✅ Updated ${updated.length} config file(s).`);
+    return;
+  }
+
+  if (options.command === 'init') {
+    initializeContract(options, options.contractId);
+    if (options.dryRun) {
+      console.log('\n✅ Dry run complete. No transactions were submitted.');
+      return;
+    }
+    console.log('✅ Contract initialized.');
+    return;
+  }
+
+  if (options.command === 'upgrade') {
+    upgradeContract(options, options.contractId, wasmPath);
+    if (options.dryRun) {
+      console.log('\n✅ Dry run complete. No transactions were submitted.');
+      return;
+    }
+    console.log('✅ Contract upgraded.');
+    return;
+  }
+
+  if (options.command === 'status') {
+    getContractStatus(options, options.contractId);
+    return;
+  }
+};
+
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  NETWORKS,
+  parseArgs,
+  setEnvVariable,
+  updateAllConfigs,
+  compileAndOptimizeWasm,
+  deployContract,
+  initializeContract,
+  upgradeContract,
+  getContractStatus,
+  validateOptions,
+  logDryRun,
+  runOrDryRun,
+  main,
+};
