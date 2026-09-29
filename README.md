@@ -643,3 +643,6 @@ See [LICENSE](LICENSE).
 
 <!-- handsoff-issue-2 -->
 - #2: GET /federation returns 500 instead of 404 when username is unregistered
+
+<!-- handsoff-issue-47 -->
+- #47: activityService.js does not log activity for username transfer events
