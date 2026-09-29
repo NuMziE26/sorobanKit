@@ -641,11 +641,5 @@ See [LICENSE](LICENSE).
 
 ## Handsoff notes
 
-<!-- handsoff-issue-2 -->
-- #2: GET /federation returns 500 instead of 404 when username is unregistered
-
-<!-- handsoff-issue-102 -->
-- #102: contractService.js does not validate CONTRACT_ID format at startup
-
-<!-- handsoff-issue-72 -->
-- #72: NetworkBadge.jsx does not display for mainnet deployments
+<!-- handsoff-issue-105 -->
+- #105: src/routes/v1/ route files lack JSDoc comments for endpoint documentation
