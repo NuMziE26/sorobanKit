@@ -587,6 +587,16 @@ Memory and CPU come from `prom-client`'s default collectors. The pool gauges rea
 Prisma's `$metrics` (which requires the `metrics` preview feature in
 `schema.prisma`) and report `0` when it is unavailable.
 
+### Deprecated endpoints
+
+Deprecated endpoints (configured in `stellar-payment-platform/src/config/deprecations.js`) respond with RFC 8594 `Deprecation`, `Sunset` (RFC 1123 HTTP-date) and `Link` headers.
+
+| Method | Path | Sunset date | Replacement |
+|---|---|---|---|
+| GET | `/api/v1/lookup` | 2027-02-28 | `/api/v2/lookup` |
+| GET | `/api/v1/stats` | 2027-01-31 | `/api/v2/stats` |
+| POST | `/api/v1/payments/bulk` | 2027-03-31 | `/api/v2/payments/bulk` |
+
 ## Smart Contract Refund Mechanism
 
 When a recipient cannot receive routed tokens (e.g. missing trustline, invalid contract recipient, or transfer rejection), the `PaymentRouter` smart contract prevents whole-transaction aborts by capturing the unrouteable tokens into the contract and crediting the sender's internal refund ledger (`DataKey::RefundBalance(user, token)`).

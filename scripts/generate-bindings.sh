@@ -33,10 +33,13 @@ if [[ -z "$CLI" ]]; then
   elif command -v soroban >/dev/null 2>&1; then
     CLI="soroban"
   else
-    echo "error: neither 'stellar' nor 'soroban' CLI found on PATH." >&2
-    echo "       Install it from https://github.com/stellar/stellar-cli or set STELLAR_CLI." >&2
+    echo "stellar CLI not found. Install with: cargo install --locked stellar-cli" >&2
+    echo "       See https://github.com/stellar/stellar-cli or set STELLAR_CLI." >&2
     exit 1
   fi
+elif ! command -v "$CLI" >/dev/null 2>&1; then
+  echo "stellar CLI not found at STELLAR_CLI=$CLI. Install with: cargo install --locked stellar-cli" >&2
+  exit 1
 fi
 
 echo "Using CLI: $CLI"

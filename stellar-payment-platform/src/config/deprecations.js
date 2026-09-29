@@ -15,8 +15,8 @@
  *                 '/api/v1/receipts/*' matches '/api/v1/receipts/abc123'.
  *   deprecatedSince ISO-8601 date the endpoint became deprecated. Surfaces
  *                 in the `Deprecation` header.
- *   sunset         ISO-8601 date the endpoint will be removed. Surfaces in
- *                 the `Sunset` header.
+ *   sunsetDate     ISO-8601 date the endpoint will be removed. Surfaces in
+ *                 the `Sunset` header as an RFC 1123 HTTP-date.
  *   replacement    (optional) Path of the endpoint consumers should migrate
  *                 to. Used in the server-side log message.
  *   documentation  (optional) URL describing the deprecation/migration.
@@ -28,7 +28,7 @@ const DEPRECATIONS = [
     method: 'GET',
     path: '/api/v1/lookup',
     deprecatedSince: '2026-08-29',
-    sunset: '2027-02-28',
+    sunsetDate: '2027-02-28',
     replacement: '/api/v2/lookup',
     documentation: 'https://docs.stellar-tags.example/deprecations/lookup',
   },
@@ -36,7 +36,7 @@ const DEPRECATIONS = [
     method: 'GET',
     path: '/api/v1/stats',
     deprecatedSince: '2026-08-29',
-    sunset: '2027-01-31',
+    sunsetDate: '2027-01-31',
     replacement: '/api/v2/stats',
     documentation: 'https://docs.stellar-tags.example/deprecations/stats',
   },
@@ -44,7 +44,7 @@ const DEPRECATIONS = [
     method: 'POST',
     path: '/api/v1/payments/bulk',
     deprecatedSince: '2026-08-29',
-    sunset: '2027-03-31',
+    sunsetDate: '2027-03-31',
     replacement: '/api/v2/payments/bulk',
     documentation: 'https://docs.stellar-tags.example/deprecations/bulk-payments',
   },

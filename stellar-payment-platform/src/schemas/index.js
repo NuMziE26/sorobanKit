@@ -264,7 +264,11 @@ const adminRoutingStatsQuerySchema = z
       .optional(),
     groupBy: z.enum(['day', 'week', 'month']).optional().default('day'),
     interval: z.enum(['day', 'week', 'month']).optional(),
-    assetCode: z.string().trim().optional(),
+    assetCode: z
+      .string()
+      .trim()
+      .regex(/^[A-Z0-9]{1,12}$/, 'assetCode must be 1-12 uppercase letters or digits')
+      .optional(),
   })
   .loose()
   .refine(
