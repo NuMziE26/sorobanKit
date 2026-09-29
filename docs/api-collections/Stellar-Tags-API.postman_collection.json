@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Stellar Tags API",
-    "description": "API Blueprint Collection for Stellar Tags (/lookup, /register, and /health), following standardized JSON response and error envelopes according to JSend/API error specifications.",
+    "description": "API Blueprint Collection for Stellar Tags (/lookup, /register, /health, /admin, /users, /metrics), following standardized JSON response and error envelopes according to JSend/API error specifications.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -12,48 +12,56 @@
         "header": [],
         "url": {
           "raw": "{{baseUrl}}/health",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "health"
-          ]
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
         },
         "description": "Check if the API is running."
       },
-      "response": []
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"]}},
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{"key": "Content-Type", "value": "application/json"}],
+          "body": "{\n  \"status\": \"ok\",\n  \"uptime\": 12345.67\n}"
+        }
+      ]
     },
     {
       "name": "Register User",
       "request": {
         "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
+        "header": [{"key": "Content-Type", "value": "application/json"}],
         "body": {
           "mode": "raw",
           "raw": "{\n  \"username\": \"testuser\",\n  \"address\": \"GAE2S2XKT6H2A4ZJ6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4\",\n  \"memo_type\": \"text\",\n  \"memo\": \"My Memo\",\n  \"signature\": \"\"\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
+          "options": {"raw": {"language": "json"}}
         },
-        "url": {
-          "raw": "{{baseUrl}}/register",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "register"
-          ]
-        },
+        "url": {"raw": "{{baseUrl}}/register", "host": ["{{baseUrl}}"], "path": ["register"]},
         "description": "Registers a new user address with a name tag."
       },
-      "response": []
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "url": {"raw": "{{baseUrl}}/register", "host": ["{{baseUrl}}"], "path": ["register"]}},
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{"key": "Content-Type", "value": "application/json"}],
+          "body": "{\n  \"status\": \"success\",\n  \"data\": {\n    \"username\": \"testuser\",\n    \"address\": \"GAE2S2XKT6H2A4ZJ6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4\"\n  }\n}"
+        },
+        {
+          "name": "400 Bad Request",
+          "originalRequest": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "url": {"raw": "{{baseUrl}}/register", "host": ["{{baseUrl}}"], "path": ["register"]}},
+          "status": "Bad Request",
+          "code": 400,
+          "_postman_previewlanguage": "json",
+          "header": [{"key": "Content-Type", "value": "application/json"}],
+          "body": "{\n  \"status\": \"error\",\n  \"message\": \"Invalid Stellar address\"\n}"
+        }
+      ]
     },
     {
       "name": "Lookup User",
@@ -62,45 +70,239 @@
         "header": [],
         "url": {
           "raw": "{{baseUrl}}/lookup?address=GAE2S2XKT6H2A4ZJ6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4&search=test&page=1&limit=10",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "lookup"
-          ],
+          "host": ["{{baseUrl}}"],
+          "path": ["lookup"],
           "query": [
-            {
-              "key": "address",
-              "value": "GAE2S2XKT6H2A4ZJ6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4",
-              "description": "Search by exact Stellar public key (optional)."
-            },
-            {
-              "key": "search",
-              "value": "test",
-              "description": "Search by username or address (optional, paginated)."
-            },
-            {
-              "key": "page",
-              "value": "1",
-              "description": "Pagination page number (default: 1)."
-            },
-            {
-              "key": "limit",
-              "value": "10",
-              "description": "Results per page (default: 10, max: 100)."
-            }
+            {"key": "address", "value": "GAE2S2XKT6H2A4ZJ6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4", "description": "Search by exact Stellar public key (optional)."},
+            {"key": "search", "value": "test", "description": "Search by username or address (optional, paginated)."},
+            {"key": "page", "value": "1", "description": "Pagination page number (default: 1)."},
+            {"key": "limit", "value": "10", "description": "Results per page (default: 10, max: 100)."}
           ]
         },
         "description": "Looks up a user's details by their Stellar address or name."
       },
-      "response": []
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/lookup?address=GAE2S2XKT6H2A4ZJ6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4", "host": ["{{baseUrl}}"], "path": ["lookup"]}},
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{"key": "Content-Type", "value": "application/json"}],
+          "body": "{\n  \"status\": \"success\",\n  \"data\": {\n    \"username\": \"testuser\",\n    \"address\": \"GAE2S2XKT6H2A4ZJ6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4\"\n  }\n}"
+        },
+        {
+          "name": "404 Not Found",
+          "originalRequest": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/lookup?address=GAE2S2XKT6H2A4ZJ6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4", "host": ["{{baseUrl}}"], "path": ["lookup"]}},
+          "status": "Not Found",
+          "code": 404,
+          "_postman_previewlanguage": "json",
+          "header": [{"key": "Content-Type", "value": "application/json"}],
+          "body": "{\n  \"status\": \"error\",\n  \"message\": \"User not found\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Admin Export",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key": "x-api-key", "value": "{{adminApiKey}}", "description": "Admin API key (placeholder)."},
+          {"key": "X-Stellar-Signature", "value": "{{stellarSignature}}", "description": "Signed request signature (placeholder)."}
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/admin/export?format=json&page=1&limit=100",
+          "host": ["{{baseUrl}}"],
+          "path": ["admin", "export"],
+          "query": [
+            {"key": "format", "value": "json", "description": "Export format: json or csv (default: json)."},
+            {"key": "page", "value": "1", "description": "Pagination page number (default: 1)."},
+            {"key": "limit", "value": "100", "description": "Records per page (default: 100)."}
+          ]
+        },
+        "description": "Exports all registered name tags. Requires admin credentials."
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {"method": "GET", "header": [{"key": "x-api-key", "value": "{{adminApiKey}}"}], "url": {"raw": "{{baseUrl}}/admin/export", "host": ["{{baseUrl}}"], "path": ["admin", "export"]}},
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{"key": "Content-Type", "value": "application/json"}],
+          "body": "{\n  \"status\": \"success\",\n  \"data\": [\n    {\n      \"username\": \"testuser\",\n      \"address\": \"GAE2S2XKT6H2A4ZJ6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4\"\n    }\n  ]\n}"
+        },
+        {
+          "name": "401 Unauthorized",
+          "originalRequest": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/admin/export", "host": ["{{baseUrl}}"], "path": ["admin", "export"]}},
+          "status": "Unauthorized",
+          "code": 401,
+          "_postman_previewlanguage": "json",
+          "header": [{"key": "Content-Type", "value": "application/json"}],
+          "body": "{\n  \"status\": \"error\",\n  \"message\": \"Missing or invalid API key\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Admin Routing Stats",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key": "x-api-key", "value": "{{adminApiKey}}", "description": "Admin API key (placeholder)."},
+          {"key": "X-Stellar-Signature", "value": "{{stellarSignature}}", "description": "Signed request signature (placeholder)."}
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/admin/stats/routing?window=24h",
+          "host": ["{{baseUrl}}"],
+          "path": ["admin", "stats", "routing"],
+          "query": [
+            {"key": "window", "value": "24h", "description": "Aggregation window, e.g. 1h, 24h, 7d (default: 24h)."}
+          ]
+        },
+        "description": "Returns routing statistics. Requires admin credentials."
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {"method": "GET", "header": [{"key": "x-api-key", "value": "{{adminApiKey}}"}], "url": {"raw": "{{baseUrl}}/admin/stats/routing", "host": ["{{baseUrl}}"], "path": ["admin", "stats", "routing"]}},
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{"key": "Content-Type", "value": "application/json"}],
+          "body": "{\n  \"status\": \"success\",\n  \"data\": {\n    \"totalRequests\": 1024,\n    \"successRate\": 0.998,\n    \"avgLatencyMs\": 42\n  }\n}"
+        },
+        {
+          "name": "403 Forbidden",
+          "originalRequest": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/admin/stats/routing", "host": ["{{baseUrl}}"], "path": ["admin", "stats", "routing"]}},
+          "status": "Forbidden",
+          "code": 403,
+          "_postman_previewlanguage": "json",
+          "header": [{"key": "Content-Type", "value": "application/json"}],
+          "body": "{\n  \"status\": \"error\",\n  \"message\": \"Insufficient permissions\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Admin Audit Logs",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key": "x-api-key", "value": "{{adminApiKey}}", "description": "Admin API key (placeholder)."},
+          {"key": "X-Stellar-Signature", "value": "{{stellarSignature}}", "description": "Signed request signature (placeholder)."}
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/admin/audit-logs?page=1&limit=50&action=register",
+          "host": ["{{baseUrl}}"],
+          "path": ["admin", "audit-logs"],
+          "query": [
+            {"key": "page", "value": "1", "description": "Pagination page number (default: 1)."},
+            {"key": "limit", "value": "50", "description": "Entries per page (default: 50)."},
+            {"key": "action", "value": "register", "description": "Filter by action type (optional)."}
+          ]
+        },
+        "description": "Returns audit log entries. Requires admin credentials."
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {"method": "GET", "header": [{"key": "x-api-key", "value": "{{adminApiKey}}"}], "url": {"raw": "{{baseUrl}}/admin/audit-logs", "host": ["{{baseUrl}}"], "path": ["admin", "audit-logs"]}},
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{"key": "Content-Type", "value": "application/json"}],
+          "body": "{\n  \"status\": \"success\",\n  \"data\": [\n    {\n      \"action\": \"register\",\n      \"actor\": \"admin\",\n      \"timestamp\": \"2024-01-01T00:00:00.000Z\"\n    }\n  ]\n}"
+        },
+        {
+          "name": "401 Unauthorized",
+          "originalRequest": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/admin/audit-logs", "host": ["{{baseUrl}}"], "path": ["admin", "audit-logs"]}},
+          "status": "Unauthorized",
+          "code": 401,
+          "_postman_previewlanguage": "json",
+          "header": [{"key": "Content-Type", "value": "application/json"}],
+          "body": "{\n  \"status\": \"error\",\n  \"message\": \"Missing or invalid API key\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "User Activity",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key": "x-api-key", "value": "{{adminApiKey}}", "description": "Admin API key (placeholder)."},
+          {"key": "X-Stellar-Signature", "value": "{{stellarSignature}}", "description": "Signed request signature (placeholder)."}
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/users/:username/activity?page=1&limit=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["users", ":username", "activity"],
+          "variable": [
+            {"key": "username", "value": "testuser", "description": "Username to fetch activity for."}
+          ],
+          "query": [
+            {"key": "page", "value": "1", "description": "Pagination page number (default: 1)."},
+            {"key": "limit", "value": "20", "description": "Entries per page (default: 20)."}
+          ]
+        },
+        "description": "Returns the activity trail for a user."
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/users/testuser/activity", "host": ["{{baseUrl}}"], "path": ["users", "testuser", "activity"]}},
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{"key": "Content-Type", "value": "application/json"}],
+          "body": "{\n  \"status\": \"success\",\n  \"data\": [\n    {\n      \"type\": \"lookup\",\n      \"timestamp\": \"2024-01-01T00:00:00.000Z\"\n    }\n  ]\n}"
+        },
+        {
+          "name": "404 Not Found",
+          "originalRequest": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/users/testuser/activity", "host": ["{{baseUrl}}"], "path": ["users", "testuser", "activity"]}},
+          "status": "Not Found",
+          "code": 404,
+          "_postman_previewlanguage": "json",
+          "header": [{"key": "Content-Type", "value": "application/json"}],
+          "body": "{\n  \"status\": \"error\",\n  \"message\": \"User not found\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Metrics",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/metrics",
+          "host": ["{{baseUrl}}"],
+          "path": ["metrics"]
+        },
+        "description": "Returns Prometheus-style metrics for the service."
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/metrics", "host": ["{{baseUrl}}"], "path": ["metrics"]}},
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "text",
+          "header": [{"key": "Content-Type", "value": "text/plain; version=0.0.4"}],
+          "body": "# HELP http_requests_total Total HTTP requests\n# TYPE http_requests_total counter\nhttp_requests_total{method=\"GET\",route=\"/lookup\"} 1024"
+        },
+        {
+          "name": "500 Internal Server Error",
+          "originalRequest": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/metrics", "host": ["{{baseUrl}}"], "path": ["metrics"]}},
+          "status": "Internal Server Error",
+          "code": 500,
+          "_postman_previewlanguage": "json",
+          "header": [{"key": "Content-Type", "value": "application/json"}],
+          "body": "{\n  \"status\": \"error\",\n  \"message\": \"Internal server error\"\n}"
+        }
+      ]
     }
   ],
   "variable": [
-    {
-      "key": "baseUrl",
-      "value": "http://localhost:5000",
-      "type": "string"
-    }
+    {"key": "baseUrl", "value": "http://localhost:5000", "type": "string"},
+    {"key": "adminApiKey", "value": "your-admin-api-key", "type": "string"},
+    {"key": "stellarSignature", "value": "your-stellar-signature", "type": "string"}
   ]
 }
