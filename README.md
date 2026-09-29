@@ -644,5 +644,8 @@ See [LICENSE](LICENSE).
 <!-- handsoff-issue-2 -->
 - #2: GET /federation returns 500 instead of 404 when username is unregistered
 
-<!-- handsoff-issue-47 -->
-- #47: activityService.js does not log activity for username transfer events
+<!-- handsoff-issue-102 -->
+- #102: contractService.js does not validate CONTRACT_ID format at startup
+
+<!-- handsoff-issue-72 -->
+- #72: NetworkBadge.jsx does not display for mainnet deployments
