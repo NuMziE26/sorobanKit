@@ -65,16 +65,26 @@ jest.mock('bad-words', () => {
 
 const request = require('supertest');
 const { app } = require('../../server');
+const { e2ePrefix, purgeTestRecords } = require('./e2eHelpers');
+
+const TEST_PREFIX = e2ePrefix();
+const TEST_USER = `${TEST_PREFIX}fed`;
 const { prisma } = require('../../prismaClient');
 
 describe('E2E: Federation Flow', () => {
+  // Runs even if beforeAll/beforeEach or a test fails, so no records leak
+  // into the next run.
+  afterAll(() => {
+    purgeTestRecords(mockDb, TEST_PREFIX);
+  });
+
   beforeEach(() => {
     mockDb.clear();
   });
 
   it('should successfully lookup a user by name and ID', async () => {
     const validUser = {
-      username: 'federationtest*localhost',
+      username: `${TEST_USER}*localhost`,
       address: 'GABC123XYZ456789FEDERATION',
     };
     mockDb.set(validUser.address, validUser);

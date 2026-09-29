@@ -356,6 +356,10 @@ router.post("/users/:username/transfer", async (req, res, next) => {
       newSignature,
     );
 
+    // Drop stale federation entries for the username and both addresses
+    invalidateFederationCache(updatedUser.username, oldAddress);
+    invalidateFederationCache(null, updatedUser.address);
+
     await recordActivity(prisma, {
       username: updatedUser.username,
       action: ACTIVITY_ACTIONS.USER_TRANSFERRED,

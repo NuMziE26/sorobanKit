@@ -31,6 +31,8 @@ function AnalyticsPage({
     avgConfirmation: null,
     successRate: null,
   });
+  const [loadError, setLoadError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
   const {
     menuRef,
     isOpen: isWalletMenuOpen,
@@ -221,6 +223,7 @@ function AnalyticsPage({
           avgConfirmation,
           successRate,
         });
+        setLoadError(null);
       } catch (error) {
         if (!isActive || error.name === "AbortError") {
           return;
@@ -231,6 +234,7 @@ function AnalyticsPage({
           avgConfirmation: null,
           successRate: null,
         });
+        setLoadError(error.message || "Failed to load analytics.");
       } finally {
         if (currentController === controller) {
           currentController = null;
@@ -248,7 +252,7 @@ function AnalyticsPage({
       }
       clearInterval(intervalId);
     };
-  }, []);
+  }, [retryCount]);
 
   const formatNumber = (value, options = {}) =>
     new Intl.NumberFormat("en-US", options).format(value);
@@ -373,35 +377,52 @@ function AnalyticsPage({
           </div>
         </section>
 
-        <section className="grid columns-3">
-          <div className="card reveal">
-            <div className="card-header">
-              <h2>Flow volume</h2>
-              <span className="badge">Last 1h</span>
+        {loadError && (
+          <section className="card reveal" role="alert">
+            <p className="field-error">
+              Unable to load analytics: {loadError}
+            </p>
+            <button
+              type="button"
+              className="connect-pill"
+              onClick={() => setRetryCount((count) => count + 1)}
+            >
+              Retry
+            </button>
+          </section>
+        )}
+
+        {!loadError && (
+          <section className="grid columns-3">
+            <div className="card reveal">
+              <div className="card-header">
+                <h2>Flow volume</h2>
+                <span className="badge">Last 1h</span>
+              </div>
+              <div className="metric">
+                {routingVolumeValue} <span>XLM</span>
+              </div>
             </div>
-            <div className="metric">
-              {routingVolumeValue} <span>XLM</span>
+            <div className="card reveal">
+              <div className="card-header">
+                <h2>Avg confirmation</h2>
+                <span className="badge">Network</span>
+              </div>
+              <div className="metric">
+                {avgConfirmationValue} <span>sec</span>
+              </div>
             </div>
-          </div>
-          <div className="card reveal">
-            <div className="card-header">
-              <h2>Avg confirmation</h2>
-              <span className="badge">Network</span>
+            <div className="card reveal">
+              <div className="card-header">
+                <h2>Routing reliability</h2>
+                <span className="badge">Last 1h</span>
+              </div>
+              <div className="metric">
+                {successRateValue} <span>percent</span>
+              </div>
             </div>
-            <div className="metric">
-              {avgConfirmationValue} <span>sec</span>
-            </div>
-          </div>
-          <div className="card reveal">
-            <div className="card-header">
-              <h2>Routing reliability</h2>
-              <span className="badge">Last 1h</span>
-            </div>
-            <div className="metric">
-              {successRateValue} <span>percent</span>
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
       </main>
       <MobileNav
         active="analytics"
