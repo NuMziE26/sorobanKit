@@ -111,6 +111,8 @@ def webhook():
     sig = request.headers.get("X-Webhook-Signature", "")
 
     expected = hmac.new(WEBHOOK_SECRET, raw_body, hashlib.sha256).hexdigest()
+    # hmac.compare_digest performs a constant-time comparison, preventing
+    # timing attacks that could otherwise leak the expected signature byte by byte.
     if not hmac.compare_digest(expected, sig):
         abort(401, "Invalid signature")
 
@@ -136,6 +138,9 @@ func verifySignature(secret, rawBody []byte, sigHeader string) bool {
     mac := hmac.New(sha256.New, secret)
     mac.Write(rawBody)
     expected := hex.EncodeToString(mac.Sum(nil))
+    // hmac.Equal performs a constant-time comparison, preventing timing
+    // attacks that could otherwise leak the expected signature byte by byte.
+    // A plain == comparison is not constant-time and must not be used here.
     return hmac.Equal([]byte(expected), []byte(sigHeader))
 }
 

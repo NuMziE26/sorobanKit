@@ -246,158 +246,87 @@ function RegistrationPage({
         </div>
         <p className="hero-copy">
           Register a username that follows your wallet across apps, tips, and
-          payments. Secure, memorable, and ready for the Stellar network.
+          payments. Your identity is secured by your Stellar keypair.
         </p>
-        <div className="pill-row">
-          <span>Instant wallet link</span>
-          <span>Unique username</span>
-          <span>Testnet ready</span>
-        </div>
-        <div className="hero-card">
+        <div className="wallet-card">
           <div>
-            <p className="card-label">Wallet status</p>
-            <p className="card-value">{walletLabel}</p>
+            <p className="wallet-label">Wallet</p>
+            <p className="wallet-value">{walletLabel}</p>
           </div>
           <button
             type="button"
             className="ghost-button"
             onClick={handleConnect}
+            disabled={isConnecting}
           >
-            {isConnecting ? "Connecting..." : "Connect wallet"}
+            {isConnecting ? "Connecting..." : userPublicKey ? "Reconnect" : "Connect Wallet"}
           </button>
-        </div>
-        <div className="hero-grid">
-          <div>
-            <h3>Own your name</h3>
-            <p>Secure a username that resolves to your wallet instantly.</p>
-          </div>
-          <div>
-            {/* 5. Removed hardcoded Freighter marketing copy */}
-            <h3>Seamless onboarding</h3>
-            <p>Connect your preferred wallet with a single approval.</p>
-          </div>
-          <div>
-            <h3>Verified presence</h3>
-            <p>Show a trusted badge to customers and collaborators.</p>
-          </div>
         </div>
       </section>
 
       <section className="form-panel">
-        <div className="form-header">
-          <h2>Registration</h2>
-          <p>Choose a name that your community will recognize.</p>
-        </div>
-        <form className="registration-form" onSubmit={handleSubmit}>
-          <label className="form-field">
-            Desired username
+        <form onSubmit={handleSubmit}>
+          <label className="field">
+            <span>Username</span>
             <input
               type="text"
-              placeholder="stellarname"
               value={username}
               onChange={(event) => {
-                const val = event.target.value;
-                setUsername(val);
-                if (val && !USERNAME_REGEX.test(val)) {
-                  setUsernameError(
-                    "Only letters, numbers, hyphens, and underscores are allowed.",
-                  );
-                } else {
-                  setUsernameError("");
-                }
+                setUsername(event.target.value);
+                if (usernameError) setUsernameError("");
               }}
-              aria-describedby={usernameError ? "username-error" : undefined}
-              aria-invalid={!!usernameError}
+              placeholder="stellar-fan"
+              autoComplete="off"
             />
-            {usernameError && (
-              <span id="username-error" className="field-error" role="alert">
-                {usernameError}
-              </span>
-            )}
+            {usernameError && <small className="field-error">{usernameError}</small>}
           </label>
-          <div className="helper-row">
-            <span>3-18 characters, letters and numbers recommended.</span>
-            <span
-              className={`char-counter${username.length >= 30 ? " char-counter--limit" : ""}`}
-            >
-              {username.length} / 30
-            </span>
-          </div>
 
-          <label className="form-field">
-            Memo type <span className="optional-label">(optional)</span>
+          <label className="field">
+            <span>Memo type (optional)</span>
             <select
               value={memoType}
               onChange={(event) => {
                 setMemoType(event.target.value);
-                setMemo("");
-                setMemoError("");
+                if (memoError) setMemoError("");
               }}
             >
               <option value="">None</option>
               <option value="text">Text</option>
               <option value="id">ID</option>
-              <option value="hash">Hash</option>
             </select>
           </label>
 
           {memoType && (
-            <label className="form-field">
-              Memo value
+            <label className="field">
+              <span>Memo value</span>
               <input
                 type="text"
-                placeholder={
-                  memoType === "text"
-                    ? "Up to 28 characters"
-                    : memoType === "id"
-                    ? "64-bit unsigned integer"
-                    : "64-character hex string"
-                }
                 value={memo}
-                maxLength={memoType === "text" ? 28 : undefined}
                 onChange={(event) => {
                   setMemo(event.target.value);
-                  setMemoError("");
+                  if (memoError) setMemoError("");
                 }}
-                aria-describedby={memoError ? "memo-error" : undefined}
-                aria-invalid={!!memoError}
+                placeholder={memoType === "text" ? "Up to 28 characters" : "Numeric ID"}
               />
-              {memoType === "text" && (
-                <span
-                  className={`char-counter${memo.length >= 28 ? " char-counter--limit" : ""}`}
-                >
-                  {memo.length} / 28
-                </span>
-              )}
-              {memoError && (
-                <span id="memo-error" className="field-error" role="alert">
-                  {memoError}
-                </span>
-              )}
+              {memoError && <small className="field-error">{memoError}</small>}
             </label>
           )}
+
           <button
-            className="primary-button"
             type="submit"
-            disabled={isSubmitting || !!usernameError}
+            className="primary-button"
+            disabled={isSubmitting}
+            aria-busy={isSubmitting ? "true" : "false"}
           >
-            {isSubmitting ? "Processing..." : "Reserve username"}
+            {isSubmitting ? "Registering..." : "Register username"}
           </button>
-        </form>
-        <div className={`status-card ${status.tone}`}>
-          <p>{status.text}</p>
-        </div>
-        <div className="form-footer">
-          <button type="button" className="ghost-button" onClick={onBack}>
+
+          <p className={`status status-${status.tone}`}>{status.text}</p>
+
+          <button type="button" className="link-button" onClick={onBack}>
             Back to dashboard
           </button>
-          <p>Wallet required to finalize registration.</p>
-          {/* 6. Removed hardcoded Freighter badge */}
-          <div className="badge-row">
-            <span>Stellar Testnet</span>
-            <span>Secure</span>
-          </div>
-        </div>
+        </form>
       </section>
     </div>
   );
