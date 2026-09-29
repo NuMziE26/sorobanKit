@@ -10,6 +10,7 @@
 //   HORIZON_NETWORK=public npm run listener  (mainnet)
 // ---------------------------------------------------------------------------
 
+const { createClient } = require('redis');
 const { prisma } = require('./prismaClient');
 const { logger } = require('./src/logger');
 const { poolGet, poolRun } = require('./src/db');
@@ -35,6 +36,66 @@ const HORIZON_URLS = {
 
 const HORIZON_URL = HORIZON_URLS[NETWORK] || HORIZON_URLS.testnet;
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS, 10) || 60000;
+
+// ---------------------------------------------------------------------------
+// Redis — cursor persistence
+// ---------------------------------------------------------------------------
+// The last processed Horizon paging_token is stored under this key so the
+// listener can resume exactly where it left off after a restart instead of
+// re-starting from "now" and missing events that arrived while it was down.
+const CURSOR_KEY = 'horizon:cursor';
+
+const redisClient = process.env.REDIS_URL
+  ? createClient({ url: process.env.REDIS_URL })
+  : null;
+
+if (redisClient) {
+  redisClient.on('error', (err) =>
+    logger.error(err, 'Horizon listener — Redis client error'),
+  );
+}
+
+/**
+ * Returns the stored Horizon paging_token, or `'now'` when Redis is
+ * unavailable or no cursor has been saved yet.
+ *
+ * @returns {Promise<string>}
+ */
+const loadCursor = async () => {
+  if (!redisClient) return 'now';
+  try {
+    const stored = await redisClient.get(CURSOR_KEY);
+    if (stored) {
+      logger.info(`[horizonListener] Resuming from stored cursor: ${stored}`);
+      return stored;
+    }
+  } catch (err) {
+    logger.warn(
+      { err },
+      '[horizonListener] Could not read cursor from Redis; starting from now',
+    );
+  }
+  return 'now';
+};
+
+/**
+ * Persists the latest processed Horizon paging_token to Redis.
+ * Errors are logged but never surface to the caller — a missed write
+ * means the worst case is re-processing a single event after restart.
+ *
+ * @param {string} pagingToken
+ */
+const saveCursor = async (pagingToken) => {
+  if (!redisClient || !pagingToken) return;
+  try {
+    await redisClient.set(CURSOR_KEY, pagingToken);
+  } catch (err) {
+    logger.warn(
+      { err, pagingToken },
+      '[horizonListener] Could not save cursor to Redis',
+    );
+  }
+};
 
 // ---------------------------------------------------------------------------
 // Horizon Health-Check Circuit Breaker
@@ -83,22 +144,32 @@ const formatPayment = (payment, trackedAccount) => {
  * Open a payment SSE stream for a single Stellar account.
  * On error the stream is removed from the active map so the next sync cycle
  * can attempt to reconnect it (instead of staying stuck on a dead stream).
+ *
+ * @param {string} accountId  Stellar public key to watch.
+ * @param {string} [startCursor='now']  Horizon paging_token to resume from.
  */
-const watchAccount = (accountId) => {
+const watchAccount = (accountId, startCursor = 'now') => {
   if (activeStreams.has(accountId)) {
     return; // Already watching
   }
 
-  logger.info(`[${timestamp()}] 👁️  Watching payments for ${accountId}`);
+  logger.info(`[${timestamp()}] 👁️  Watching payments for ${accountId} (cursor: ${startCursor})`);
 
   const closeStream = horizon
     .payments()
     .forAccount(accountId)
-    .cursor('now')
+    .cursor(startCursor)
     .stream({
       onmessage: (payment) => {
         if (payment.type === 'payment' || payment.type_i === 1) {
           logger.info(formatPayment(payment, accountId));
+
+          // Persist the cursor before dispatching so a crash after dispatch
+          // doesn't re-deliver the same event on the next restart.
+          if (payment.paging_token) {
+            saveCursor(payment.paging_token);
+          }
+
           dispatchPaymentWebhooks({
             prisma,
             poolGetFn: poolGet,
@@ -153,10 +224,14 @@ const syncWatchedAccounts = async () => {
 
     const currentAddresses = new Set(rows.map((r) => r.address));
 
+    // Load the stored cursor once per sync cycle so newly opened streams
+    // resume from the same position as the last processed event.
+    const cursor = await loadCursor();
+
     // Start watching new accounts
     for (const { address } of rows) {
       if (!activeStreams.has(address)) {
-        watchAccount(address);
+        watchAccount(address, cursor);
       }
     }
 
@@ -188,6 +263,13 @@ const shutdown = async () => {
   }
   activeStreams.clear();
   await closeWebhookQueue();
+  if (redisClient) {
+    try {
+      await redisClient.quit();
+    } catch {
+      // best-effort disconnect
+    }
+  }
   await prisma.$disconnect();
   process.exit(0);
 };
@@ -206,6 +288,19 @@ const main = async () => {
   logger.info(`  Poll:     every ${POLL_INTERVAL_MS / 1000}s for new accounts`);
   logger.info('═══════════════════════════════════════════════════════');
 
+  // Connect to Redis when configured so the cursor can be loaded and saved.
+  if (redisClient) {
+    try {
+      await redisClient.connect();
+      logger.info('[horizonListener] Connected to Redis for cursor persistence');
+    } catch (err) {
+      logger.warn(
+        { err },
+        '[horizonListener] Redis unavailable — cursor persistence disabled for this run',
+      );
+    }
+  }
+
   // Initial sync
   await syncWatchedAccounts();
 
@@ -220,3 +315,6 @@ main().catch((err) => {
   logger.error('Fatal error starting Horizon listener:', err);
   process.exit(1);
 });
+
+// Exported for unit tests only.
+module.exports = { loadCursor, saveCursor, CURSOR_KEY, watchAccount, syncWatchedAccounts };

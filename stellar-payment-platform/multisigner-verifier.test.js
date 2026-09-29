@@ -26,6 +26,8 @@ const {
   verifyMultiSignerThreshold,
   isSingleSignerAccount,
   verifyMasterSignature,
+  withTimeout,
+  HORIZON_FETCH_TIMEOUT_MS,
 } = require('./src/multisigner-verifier');
 
 describe('Multi-Signer Verification Module', () => {
@@ -93,6 +95,49 @@ describe('Multi-Signer Verification Module', () => {
 
       expect(loadAccount).toHaveBeenCalledWith('GDZST3XVCDTUJ76ZAV2HA72KYQM3DGLLFVDNNZ6XTQCR3BQFGMQ25E4Z');
       expect(result.accountId).toBe('GDZST3XVCDTUJ76ZAV2HA72KYQM3DGLLFVDNNZ6XTQCR3BQFGMQ25E4Z');
+    });
+
+    it('should reject when the Horizon request hangs past the timeout', async () => {
+      jest.useFakeTimers();
+
+      // loadAccount never resolves — simulates a hung Horizon connection
+      loadAccount.mockReturnValue(new Promise(() => {}));
+
+      const fetchPromise = fetchAccountSigners(
+        'GDZST3XVCDTUJ76ZAV2HA72KYQM3DGLLFVDNNZ6XTQCR3BQFGMQ25E4Z',
+      );
+
+      // Advance time past the configured timeout
+      jest.advanceTimersByTime(HORIZON_FETCH_TIMEOUT_MS + 1);
+
+      await expect(fetchPromise).rejects.toThrow(/timed out after \d+ms/);
+
+      jest.useRealTimers();
+    });
+  });
+
+  describe('withTimeout helper', () => {
+    it('should resolve with the promise value when it settles before the deadline', async () => {
+      const result = await withTimeout(Promise.resolve('ok'), 1000, 'test');
+      expect(result).toBe('ok');
+    });
+
+    it('should reject with a timeout message when the promise hangs', async () => {
+      jest.useFakeTimers();
+
+      const hanging = new Promise(() => {});
+      const racePromise = withTimeout(hanging, 500, 'slow operation');
+
+      jest.advanceTimersByTime(501);
+
+      await expect(racePromise).rejects.toThrow('slow operation timed out after 500ms');
+
+      jest.useRealTimers();
+    });
+
+    it('should propagate rejections from the inner promise', async () => {
+      const inner = Promise.reject(new Error('inner failure'));
+      await expect(withTimeout(inner, 1000, 'test')).rejects.toThrow('inner failure');
     });
   });
 

@@ -218,6 +218,29 @@ describe('Prometheus Metrics Endpoint', () => {
       expect(response.status).toBe(200);
       expect(metricsText).toBeTruthy();
     });
+
+    // Issue #29 — dynamic route segments must be recorded as the parameterised
+    // Express pattern, never the concrete value that was in the URL. Hitting
+    // /api/v1/users/alice/activity must produce
+    //   route="/api/v1/users/:username/activity"
+    // and must NOT record the literal username "alice" in any label.
+    test('should record the parameterised pattern for dynamic routes, not the concrete path value', async () => {
+      // The ownership check requires a valid signature; the route returns 400/401
+      // if authentication fails, but the middleware still records the label.
+      await request(app)
+        .get('/api/v1/users/alice/activity')
+        .set('X-Stellar-Signature', 'dummy-sig')
+        .set('X-Stellar-Signer', 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF');
+
+      const response = await request(app).get('/metrics');
+      const metricsText = response.text;
+
+      // The route label must be the Express pattern, not the concrete value.
+      expect(metricsText).toMatch(/route="\/api\/v1\/users\/:username\/activity"/);
+
+      // The raw username value must never appear as a label value.
+      expect(metricsText).not.toMatch(/route="[^"]*alice[^"]*"/);
+    });
   });
 
   describe('Metrics middleware integration', () => {

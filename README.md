@@ -443,6 +443,10 @@ several usernames, the primary one is returned.
   - `400 Bad Request`: Missing `address` parameter.
   - `404 Not Found`: Username not found for this address.
   - `500 Internal Server Error`: Database lookup failed.
+- **Performance:** `username_registry.address` is backed by a non-unique index
+  (`@@index([address])` on `User`, created by the
+  `20260829120000_add_username_aliases` migration), so reverse lookups stay an
+  index scan instead of a full table scan as the user count grows.
 
 ### `GET /users/:username/activity`
 Returns the caller's own activity trail: registrations, transfers,
