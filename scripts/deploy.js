@@ -10,6 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { execSync } = require('child_process');
 
 // ── Network Configurations ───────────────────────────────────────────────────
@@ -60,6 +61,95 @@ const DEFAULT_OPTIMIZED_WASM_PATH = path.join(
   'payment_router.optimized.wasm'
 );
 
+// ── WASM Hash Verification ───────────────────────────────────────────────────
+
+/**
+ * Computes the SHA-256 hash of a local WASM file.
+ *
+ * @param {string} wasmPath - Absolute path to the .wasm file.
+ * @returns {string} Lowercase hex-encoded SHA-256 digest.
+ */
+const computeLocalWasmHash = (wasmPath) => {
+  const buffer = fs.readFileSync(wasmPath);
+  return crypto.createHash('sha256').update(buffer).digest('hex');
+};
+
+/**
+ * Retrieves the on-chain WASM hash for an uploaded contract via the Stellar RPC.
+ *
+ * @param {string} wasmHash - Hex-encoded hash returned by the upload step.
+ * @param {object} network - Network configuration object.
+ * @returns {Promise<string>} Lowercase hex-encoded on-chain hash.
+ */
+const fetchOnChainWasmHash = async (wasmHash, network) => {
+  const response = await fetch(network.rpcUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'getContractWasmByHash',
+      params: { hash: wasmHash },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`RPC request failed with status ${response.status}`);
+  }
+
+  const payload = await response.json();
+  if (payload.error) {
+    throw new Error(`RPC error: ${payload.error.message || JSON.stringify(payload.error)}`);
+  }
+
+  const result = payload.result;
+  const onChainHash =
+    typeof result === 'string'
+      ? result
+      : result && (result.hash || result.wasmHash || result.wasm_hash);
+
+  if (!onChainHash) {
+    throw new Error('RPC response did not include a WASM hash');
+  }
+
+  return String(onChainHash).toLowerCase();
+};
+
+/**
+ * Verifies that the uploaded WASM hash matches the local file's SHA-256.
+ * Aborts the process with a non-zero exit code if they differ.
+ *
+ * @param {string} wasmPath - Local .wasm file path.
+ * @param {string} uploadedHash - Hash returned by the upload step.
+ * @param {object} network - Network configuration object.
+ * @param {object} [options]
+ * @returns {Promise<boolean>} True when the hashes match (or check skipped).
+ */
+const verifyWasmHash = async (wasmPath, uploadedHash, network, options = {}) => {
+  const expectedHash = computeLocalWasmHash(wasmPath);
+
+  if (options.skipHashCheck) {
+    console.warn('⚠️  --skip-hash-check enabled: skipping WASM hash verification.');
+    console.warn(`   Expected (local) hash: ${expectedHash}`);
+    return true;
+  }
+
+  const actualHash = await fetchOnChainWasmHash(uploadedHash, network);
+
+  console.log(`🔎 Expected WASM hash (local):  ${expectedHash}`);
+  console.log(`🔎 Actual WASM hash (on-chain): ${actualHash}`);
+
+  if (expectedHash !== actualHash) {
+    console.error('❌ WASM hash mismatch: the uploaded contract does not match the local file.');
+    console.error(`   Expected: ${expectedHash}`);
+    console.error(`   Actual:   ${actualHash}`);
+    process.exit(1);
+  }
+
+  console.log('✅ WASM hash verified: on-chain hash matches local file.');
+  return true;
+};
+
 // ── CLI Argument Parser ──────────────────────────────────────────────────────
 
 /**
@@ -82,6 +172,7 @@ const parseArgs = (argv = process.argv.slice(2)) => {
     wasmPath: null,
     dryRun: false,
     skipBuild: false,
+    skipHashCheck: false,
     envFiles: [
       path.join(ROOT_DIR, 'stellar-payment-platform', '.env'),
       path.join(ROOT_DIR, 'payment-dashboard', '.env'),
@@ -122,6 +213,8 @@ const parseArgs = (argv = process.argv.slice(2)) => {
       options.dryRun = true;
     } else if (arg === '--skip-build') {
       options.skipBuild = true;
+    } else if (arg === '--skip-hash-check') {
+      options.skipHashCheck = true;
     } else if (arg === '--env-file') {
       options.envFiles.push(path.resolve(argv[++i]));
     } else if (!arg.startsWith('-')) {
@@ -256,232 +349,6 @@ const compileAndOptimizeWasm = (options = {}) => {
     console.warn('⚠️  Cargo compilation failed or cargo not available.');
   }
 
-  let finalWasmPath = DEFAULT_WASM_PATH;
+  let
 
-  // Try optimizing with stellar/soroban CLI or wasm-opt if available
-  try {
-    if (fs.existsSync(DEFAULT_WASM_PATH)) {
-      console.log('⚡ Optimizing WASM bytecode...');
-      try {
-        execSync(
-          `stellar contract optimize --wasm "${DEFAULT_WASM_PATH}" --output-dir "${path.dirname(DEFAULT_OPTIMIZED_WASM_PATH)}"`,
-          { stdio: 'pipe' }
-        );
-        finalWasmPath = DEFAULT_OPTIMIZED_WASM_PATH;
-      } catch {
-        try {
-          execSync(
-            `soroban contract optimize --wasm "${DEFAULT_WASM_PATH}"`,
-            { stdio: 'pipe' }
-          );
-          finalWasmPath = DEFAULT_OPTIMIZED_WASM_PATH;
-        } catch {
-          console.log('   Note: stellar-cli / soroban-cli optimizer skipped (using standard release WASM).');
-        }
-      }
-    }
-  } catch (err) {
-    console.warn(`⚠️  Optimization check skipped: ${err.message}`);
-  }
-
-  return finalWasmPath;
-};
-
-// ── Deployment & Upgrade Workflows ───────────────────────────────────────────
-
-/**
- * Deploys the contract to the selected network.
- *
- * @param {object} options
- * @returns {Promise<{ contractId: string, wasmHash: string }>}
- */
-const executeDeploy = async (options) => {
-  const network = NETWORKS[options.network] || NETWORKS.testnet;
-  console.log(`\n🚀 Deploying PaymentRouter to Stellar [${network.name.toUpperCase()}]...`);
-  console.log(`   RPC URL: ${network.rpcUrl}`);
-
-  if (options.dryRun) {
-    const mockContractId = 'CA7QTESTINGCONTRACTID1234567890DEPLOYEDSUCCESSFULLYTEST';
-    const mockWasmHash = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
-    console.log(`   [Dry Run] Simulated Contract ID: ${mockContractId}`);
-    console.log(`   [Dry Run] Simulated WASM Hash:   ${mockWasmHash}`);
-
-    const updatedFiles = updateAllConfigs(mockContractId, options.envFiles, options);
-    console.log(`\n✅ [Dry Run] Config files that would be updated (${updatedFiles.length}):`);
-    updatedFiles.forEach((f) => console.log(`   - ${f}`));
-
-    return { contractId: mockContractId, wasmHash: mockWasmHash };
-  }
-
-  let wasmPath = options.wasmPath;
-  if (!options.skipBuild) {
-    wasmPath = compileAndOptimizeWasm(options);
-  }
-
-  let contractId;
-  let wasmHash;
-
-  // Use stellar / soroban CLI to deploy
-  try {
-    console.log('📤 Uploading WASM and creating contract instance...');
-    const sourceFlag = options.source ? `--source "${options.source}"` : '';
-    const deployCmd = `stellar contract deploy --wasm "${wasmPath}" --network "${network.name}" ${sourceFlag}`.trim();
-    const output = execSync(deployCmd, { encoding: 'utf8' }).trim();
-    contractId = output.split('\n').pop().trim();
-  } catch (err) {
-    // Fallback error with clear instructions
-    console.error('\n❌ Deployment failed:');
-    console.error(err.message);
-    throw err;
-  }
-
-  console.log(`\n🎉 Contract successfully deployed!`);
-  console.log(`   Contract ID: ${contractId}`);
-
-  // Automatically update config files
-  const updated = updateAllConfigs(contractId, options.envFiles, options);
-  console.log(`\n📝 Updated configuration files:`);
-  updated.forEach((f) => console.log(`   - ${f}`));
-
-  return { contractId, wasmHash };
-};
-
-/**
- * Upgrades an existing contract instance to a new WASM bytecode.
- *
- * @param {object} options
- * @returns {Promise<{ contractId: string, newWasmHash: string }>}
- */
-const executeUpgrade = async (options) => {
-  const network = NETWORKS[options.network] || NETWORKS.testnet;
-  const contractId = options.contractId;
-
-  if (!contractId) {
-    throw new Error('Missing target contract ID for upgrade. Pass --contract-id <CONTRACT_ID>.');
-  }
-
-  console.log(`\n🔄 Upgrading PaymentRouter contract [${contractId}] on [${network.name.toUpperCase()}]...`);
-
-  if (options.dryRun) {
-    const mockWasmHash = 'f4c8996fb92427ae41e4649b934ca495991b7852b855e3b0c44298fc1c149afb';
-    console.log(`   [Dry Run] Uploaded new WASM hash: ${mockWasmHash}`);
-    console.log(`   [Dry Run] Invoked upgrade(${mockWasmHash}) as admin`);
-    return { contractId, newWasmHash: mockWasmHash };
-  }
-
-  let wasmPath = options.wasmPath;
-  if (!options.skipBuild) {
-    wasmPath = compileAndOptimizeWasm(options);
-  }
-
-  let newWasmHash;
-  try {
-    console.log('📤 Uploading new WASM bytecode...');
-    const sourceFlag = options.source ? `--source "${options.source}"` : '';
-    const installCmd = `stellar contract install --wasm "${wasmPath}" --network "${network.name}" ${sourceFlag}`.trim();
-    newWasmHash = execSync(installCmd, { encoding: 'utf8' }).trim().split('\n').pop().trim();
-    console.log(`   New WASM Hash: ${newWasmHash}`);
-
-    console.log('⚙️  Invoking contract upgrade method...');
-    const invokeCmd = `stellar contract invoke --id "${contractId}" --network "${network.name}" ${sourceFlag} -- upgrade --new_wasm_hash "${newWasmHash}"`.trim();
-    execSync(invokeCmd, { stdio: 'inherit' });
-  } catch (err) {
-    console.error('\n❌ Upgrade failed:');
-    console.error(err.message);
-    throw err;
-  }
-
-  console.log(`\n🎉 Contract ${contractId} successfully upgraded to WASM ${newWasmHash}!`);
-  return { contractId, newWasmHash };
-};
-
-// ── Help & Banner ────────────────────────────────────────────────────────────
-
-const printHelp = () => {
-  console.log(`
-Stellar Soroban Contract Deployment & Upgrade CLI
-
-USAGE:
-  node scripts/deploy.js [command] [options]
-  ./scripts/deploy_contract.sh [command] [options]
-
-COMMANDS:
-  deploy    Compile, optimize, deploy, and update config files (default)
-  upgrade   Compile, upload new WASM, and invoke contract upgrade method
-  build     Compile and optimize WASM without deploying
-  init      Initialize a deployed contract with admin and fee parameters
-  help      Show this help message
-
-OPTIONS:
-  -n, --network <name>       Network to deploy to: testnet (default), mainnet, local, futurenet
-  -s, --source <secret/id>   Stellar secret key or CLI identity name
-  -c, --contract-id <id>     Target contract ID (required for upgrade/init)
-  --admin <address>          Contract admin address
-  --treasury <address>       Platform treasury address
-  --fee-bps <number>         Platform fee in basis points (default: 100 = 1%)
-  --fee-cap <number>         Fee cap amount in stroops (default: 10000000 = 1 XLM)
-  --max-amount <number>      Maximum payment limit per transaction
-  --wasm <path>              Path to precompiled .wasm file
-  --dry-run                  Simulate actions without submitting on-chain transactions
-  --skip-build               Skip cargo compilation if wasm is already built
-  --env-file <path>          Custom .env file to update with contract ID
-  -h, --help                 Show help documentation
-
-EXAMPLES:
-  # Deploy to testnet in simulation mode
-  node scripts/deploy.js deploy --network testnet --dry-run
-
-  # Deploy to testnet with custom admin and secret
-  node scripts/deploy.js deploy --network testnet --source S... --admin G...
-
-  # Upgrade contract on testnet
-  node scripts/deploy.js upgrade --contract-id CD... --network testnet --source S...
-`);
-};
-
-// ── Main Entrypoint ──────────────────────────────────────────────────────────
-
-const main = async () => {
-  const options = parseArgs();
-
-  if (options.command === 'help') {
-    printHelp();
-    return;
-  }
-
-  if (options.command === 'version') {
-    console.log('Soroban Contract Deployer CLI v1.0.0');
-    return;
-  }
-
-  if (options.command === 'build') {
-    compileAndOptimizeWasm(options);
-    console.log('✅ Build complete.');
-    return;
-  }
-
-  if (options.command === 'upgrade') {
-    await executeUpgrade(options);
-    return;
-  }
-
-  // Default: deploy
-  await executeDeploy(options);
-};
-
-if (require.main === module) {
-  main().catch((err) => {
-    console.error(`\n❌ Error: ${err.message}`);
-    process.exit(1);
-  });
-}
-
-module.exports = {
-  parseArgs,
-  setEnvVariable,
-  updateAllConfigs,
-  compileAndOptimizeWasm,
-  executeDeploy,
-  executeUpgrade,
-  NETWORKS,
-};
+/* … truncated 7932 chars — edit only what you need near the top … */

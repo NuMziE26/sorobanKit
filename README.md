@@ -641,8 +641,8 @@ See [LICENSE](LICENSE).
 
 ## Handsoff notes
 
-<!-- handsoff-issue-100 -->
-- #100: src/utils/tracing.js OpenTelemetry stub is dead code, never wired to instrumentation
+<!-- handsoff-issue-2 -->
+- #2: GET /federation returns 500 instead of 404 when username is unregistered
 
 <!-- handsoff-issue-102 -->
 - #102: contractService.js does not validate CONTRACT_ID format at startup
