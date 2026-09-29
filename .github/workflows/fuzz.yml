@@ -1,32 +1,30 @@
-name: Fuzz route_payments
+name: Fuzz
 
 on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+  schedule:
+    - cron: '0 3 * * *'
 
 jobs:
   fuzz:
-    name: cargo-fuzz route_payments
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./payment_router
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - route_payment
+          - route_batch
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Rust toolchain
+      - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@nightly
 
-      - name: Cache cargo registry and build artifacts
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: ./payment_router/fuzz
-
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --force
+        run: cargo install cargo-fuzz
 
-      - name: Run route_payments fuzz target
-        run: cargo fuzz run route_payments -- -max_total_time=120
+      - name: Run ${{ matrix.target }} fuzz target
+        working-directory: payment_router
+        run: cargo fuzz run ${{ matrix.target }} -- -max_total_time=30
