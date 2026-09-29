@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     nodePolyfills({
@@ -13,6 +14,15 @@ export default defineConfig({
       // outside the dashboard root.
       exclude: ['buffer'],
     }),
+    // Bundle size analysis: `npm run analyze` (vite build --mode analyze)
+    // emits dist/stats.html with a treemap of the production bundle.
+    mode === 'analyze' &&
+      visualizer({
+        filename: 'dist/stats.html',
+        template: 'treemap',
+        gzipSize: true,
+        brotliSize: true,
+      }),
   ],
   resolve: {
     dedupe: [
@@ -40,4 +50,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))
