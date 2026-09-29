@@ -646,3 +646,6 @@ See [LICENSE](LICENSE).
 
 <!-- handsoff-issue-102 -->
 - #102: contractService.js does not validate CONTRACT_ID format at startup
+
+<!-- handsoff-issue-72 -->
+- #72: NetworkBadge.jsx does not display for mainnet deployments
