@@ -24,6 +24,15 @@ jobs:
           cache: 'npm'
           cache-dependency-path: ./stellar-payment-platform/package-lock.json
 
+      - name: Cache Backend node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            stellar-payment-platform/node_modules
+            ~/.npm
+          key: ${{ runner.os }}-node-backend-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-backend-
 
       - name: Install Backend Dependencies
         run: npm install
@@ -65,6 +74,16 @@ jobs:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: ./payment-dashboard/package-lock.json
+
+      - name: Cache Frontend node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            payment-dashboard/node_modules
+            ~/.npm
+          key: ${{ runner.os }}-node-frontend-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-frontend-
           
       - name: Install Frontend Dependencies
         run: npm install --legacy-peer-deps
