@@ -53,15 +53,15 @@ FROM node:lts-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Run as the unprivileged `node` user that ships with the base image
-# (smaller attack surface). /app stays writable for the logs/data dirs the
-# app creates at runtime.
-RUN mkdir -p /app/logs /app/data \
+# Create a dedicated unprivileged `node` group/user and run the server as it.
+# /app stays writable for the logs/data dirs the app creates at runtime.
+RUN addgroup --system node && adduser --system --ingroup node node \
+	&& mkdir -p /app/logs /app/data \
 	&& chown node:node /app /app/logs /app/data
 
 # Production node_modules only (pruned + slimmed in the builder), plus the
 # runtime application files. Tests, docs, logs and build artifacts never
-# enter this stage.
+# enter this stage. Everything is owned by the `node` user.
 COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/prisma ./prisma
 COPY --from=builder --chown=node:node /app/package.json ./package.json
@@ -72,8 +72,9 @@ COPY --from=builder --chown=node:node /app/src ./src
 COPY --from=builder --chown=node:node /app/middleware ./middleware
 COPY --from=builder --chown=node:node /app/config ./config
 
-USER node
 RUN chmod +x startup.sh
+
+USER node
 
 # curl is intentionally NOT installed; busybox wget ships with alpine and
 # keeps the image slim.
