@@ -639,3 +639,7 @@ Upon successful deployment, the tool automatically updates the contract address 
 
 See [LICENSE](LICENSE).
 
+## Handsoff notes
+
+<!-- handsoff-issue-48 -->
+- #48: GET /health returns redis: down instead of not configured when REDIS_URL is unset
