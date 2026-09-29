@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Stellar Tags API",
-    "description": "API Blueprint Collection for Stellar Tags (/lookup, /register, and /health), following standardized JSON response and error envelopes according to JSend/API error specifications.",
+    "description": "API Blueprint Collection for Stellar Tags (/lookup, /register, /health, and /transactions/export), following standardized JSON response and error envelopes according to JSend/API error specifications.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -92,6 +92,32 @@
           ]
         },
         "description": "Looks up a user's details by their Stellar address or name."
+      },
+      "response": []
+    },
+    {
+      "name": "Export Transactions",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/transactions/export?address=GAE2S2XKT6H2A4ZJ6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "transactions",
+            "export"
+          ],
+          "query": [
+            {
+              "key": "address",
+              "value": "GAE2S2XKT6H2A4ZJ6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4D6K4",
+              "description": "Stellar public key whose transactions should be exported."
+            }
+          ]
+        },
+        "description": "Exports the transaction history for a Stellar address.\n\nResponses:\n- 200 OK: Returns the exported transaction data.\n- 404 NOT_FOUND: The address was not found on Horizon. This typically means the account has never been funded. Error message: \"Account not found on Horizon. The address may not yet be funded.\"\n- 500 INTERNAL_ERROR: An unexpected error occurred while contacting Horizon."
       },
       "response": []
     }
