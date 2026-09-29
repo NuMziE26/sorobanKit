@@ -639,3 +639,7 @@ Upon successful deployment, the tool automatically updates the contract address 
 
 See [LICENSE](LICENSE).
 
+## Handsoff notes
+
+<!-- handsoff-issue-105 -->
+- #105: src/routes/v1/ route files lack JSDoc comments for endpoint documentation
