@@ -641,5 +641,8 @@ See [LICENSE](LICENSE).
 
 ## Handsoff notes
 
-<!-- handsoff-issue-7 -->
-- #7: GET /transactions/export buffers entire result in memory instead of streaming
+<!-- handsoff-issue-100 -->
+- #100: src/utils/tracing.js OpenTelemetry stub is dead code, never wired to instrumentation
+
+<!-- handsoff-issue-102 -->
+- #102: contractService.js does not validate CONTRACT_ID format at startup
